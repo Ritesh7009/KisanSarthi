@@ -58,33 +58,47 @@ public class SmsService {
         dispatchSms(phone, farmerName, null, msg, "PAYMENT");
     }
 
-    /** Generic SMS entry point used by queue/payment flows. */
-    @Async
-    public void sendSms(String phone, String farmerName, String message) {
-        dispatchSms(phone, farmerName, null, message, "GENERAL");
+    /**
+     * Synchronous SMS entry point used by SMS controller and notification services
+     * to immediately capture provider dispatch result (real SID and status).
+     */
+    public SmsResult sendSms(String phone, String farmerName, String message) {
+        return dispatchSms(phone, farmerName, null, message, "GENERAL");
     }
 
     public List<SmsLog> getRecentLogs() {
         return smsLogRepository.findTop50ByOrderByCreatedAtDesc();
     }
 
-    private void dispatchSms(String phone, String farmerName, String maskedAadhar, String message, String category) {
+    private SmsResult dispatchSms(String phone, String farmerName, String maskedAadhar, String message, String category) {
         SmsLog logEntry = new SmsLog(phone, farmerName, maskedAadhar, message, "SENDING");
         logEntry.setSenderHeader(defaultSenderHeader);
         logEntry = smsLogRepository.save(logEntry);
 
         try {
-            String providerRef = smsProvider.sendSms(phone, message, defaultSenderHeader);
-            logEntry.setStatus("SENT");
-            logEntry.setDeliveryReport("Dispatched via provider. Ref: " + providerRef);
+            SmsResult result = smsProvider.sendSms(phone, message, defaultSenderHeader);
+            if (result.isSuccess()) {
+                logEntry.setStatus(result.getStatus());
+                logEntry.setDeliveryReport("Dispatched via provider. Ref: " + result.getSid());
+            } else {
+                logEntry.setStatus("FAILED");
+                logEntry.setDeliveryReport(String.format("Error [code=%s]: %s",
+                        result.getErrorCode() != null ? result.getErrorCode() : "N/A",
+                        result.getErrorMessage()));
+            }
             logEntry.setUpdatedAt(Instant.now());
             smsLogRepository.save(logEntry);
+            return result;
         } catch (Exception e) {
-            log.error("Failed to send SMS to ****{}: {}", phone.substring(Math.max(0, phone.length() - 4)), e.getMessage());
+            String safeMsg = e.getMessage() != null ? e.getMessage() : "Unknown exception during SMS dispatch";
+            log.error("Unexpected error sending SMS to ****{}: {}",
+                    phone != null && phone.length() >= 4 ? phone.substring(phone.length() - 4) : phone,
+                    safeMsg);
             logEntry.setStatus("FAILED");
-            logEntry.setDeliveryReport("Error: " + e.getMessage());
+            logEntry.setDeliveryReport("Error: " + safeMsg);
             logEntry.setUpdatedAt(Instant.now());
             smsLogRepository.save(logEntry);
+            return SmsResult.failed(null, safeMsg);
         }
     }
 }

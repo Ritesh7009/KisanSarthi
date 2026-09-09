@@ -48,8 +48,7 @@ public class SmsLogDto {
         } else if (report != null && !report.isBlank()) {
             dto.setDeliveryReceiptId(report);
         } else {
-            String shortId = dto.getId().length() >= 8 ? dto.getId().substring(0, 8).toUpperCase() : "1001";
-            dto.setDeliveryReceiptId("DLT-SMS-" + shortId);
+            dto.setDeliveryReceiptId(null);
         }
 
         dto.setCreatedAt(log.getCreatedAt());

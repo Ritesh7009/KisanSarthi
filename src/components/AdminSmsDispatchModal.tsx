@@ -203,13 +203,20 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
       });
 
       const data = await res.json();
-      if (data.success || data.status === 'SENT' || data.deliveryReceiptId) {
+      const payload = data.data || data;
+      const isFailed = data.success === false || payload.status === 'FAILED';
+      const isAccepted = !isFailed && (payload.sid || payload.deliveryReceiptId || payload.status === 'ACCEPTED' || payload.status === 'QUEUED' || data.success);
+
+      if (isAccepted && !isFailed) {
+        const sid = payload.sid || payload.deliveryReceiptId || 'Accepted';
+        const status = payload.status || 'ACCEPTED';
         setSuccessNotice(
-          `Real SMS dispatched to +91 ${phoneToSend}! Delivery Receipt: ${data.deliveryReceiptId || data.sid || 'CONFIRMED'} (TRAI DLT Verified)`
+          `Twilio accepted SMS for +91 ${phoneToSend}! SID: ${sid} (Status: ${status})`
         );
         fetchLogs();
       } else {
-        setErrorNotice(data.error || data.message || 'Failed to dispatch SMS');
+        const errorMsg = data.error?.message || payload.errorMessage || data.message || payload.message || 'Twilio SMS dispatch failed';
+        setErrorNotice(typeof errorMsg === 'string' ? errorMsg : JSON.stringify(errorMsg));
       }
     } catch (err) {
       setErrorNotice('Network error sending SMS');

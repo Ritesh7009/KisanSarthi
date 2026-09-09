@@ -1,17 +1,18 @@
 package com.kisansarthi.sms;
 
+import com.kisansarthi.common.ApiError;
 import com.kisansarthi.common.ApiResponse;
 import com.kisansarthi.common.BusinessException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/sms")
@@ -71,18 +72,43 @@ public class SmsController {
                 ? request.getFarmerName()
                 : "Farmer";
 
-        // Dispatch SMS reusing existing SmsService method signature
-        smsService.sendSms(phone, farmerName, message);
+        // Synchronous dispatch to immediately capture real provider result
+        SmsResult result = smsService.sendSms(phone, farmerName, message);
 
-        String deliveryReceiptId = "DLT-SMS-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
-        SendSmsResponse response = new SendSmsResponse(
-                deliveryReceiptId,
-                "SENT",
-                phone,
-                farmerName,
-                "SMS queued for dispatch via configured provider"
-        );
+        if (result.isSuccess()) {
+            SendSmsResponse response = new SendSmsResponse(
+                    result.getSid(),
+                    result.getStatus(),
+                    phone,
+                    farmerName,
+                    message
+            );
+            return ResponseEntity.ok(ApiResponse.ok(
+                    response,
+                    "Twilio accepted SMS (status: " + result.getStatus() + ")"
+            ));
+        } else {
+            SendSmsResponse response = new SendSmsResponse(
+                    null,
+                    "FAILED",
+                    phone,
+                    farmerName,
+                    message
+            );
+            response.setErrorCode(result.getErrorCode());
+            response.setErrorMessage(result.getErrorMessage());
 
-        return ResponseEntity.ok(ApiResponse.ok(response, "SMS dispatched successfully"));
+            ApiResponse<SendSmsResponse> errorResponse = new ApiResponse<>(
+                    false,
+                    response,
+                    "Twilio SMS failed: " + (result.getErrorMessage() != null ? result.getErrorMessage() : "Provider rejected request")
+            );
+            errorResponse.setError(new ApiError(
+                    result.getErrorCode() != null ? "TWILIO_ERROR_" + result.getErrorCode() : "TWILIO_DISPATCH_FAILED",
+                    result.getErrorMessage() != null ? result.getErrorMessage() : "Provider rejected request"
+            ));
+
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(errorResponse);
+        }
     }
 }

@@ -81,6 +81,6 @@ public class SmsLog {
         if (deliveryReport != null && deliveryReport.contains("Ref: ")) {
             return deliveryReport.substring(deliveryReport.indexOf("Ref: ") + 5).trim();
         }
-        return deliveryReport != null ? deliveryReport : (id != null ? "DLT-SMS-" + id.toString().substring(0, 8).toUpperCase() : "DLT-SMS-GEN");
+        return deliveryReport;
     }
 }

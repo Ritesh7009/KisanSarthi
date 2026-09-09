@@ -713,7 +713,7 @@ async function startServer() {
       dispatchedAt: new Date().toISOString(),
       dispatchedBy: gatewayResult.provider === 'TWILIO' ? 'Twilio SMS Gateway' : 'Admin Dispatcher',
       channel: 'SMS_GATEWAY',
-      deliveryReceiptId: gatewayResult.externalSid || `DLT-SMS-${Date.now().toString().slice(-6)}`,
+      deliveryReceiptId: gatewayResult.externalSid,
     };
 
     smsLogs.unshift(logItem);
