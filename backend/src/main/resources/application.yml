@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: kisansarthi-backend
+  profiles:
+    active: dev
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+
+# App Custom Properties
+kisansarthi:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    access-token-expiration-ms: 86400000 # 24 hours
+    refresh-token-expiration-ms: 604800000 # 7 days
+  otp:
+    expiration-minutes: 5
+    max-attempts: 3
+    resend-cooldown-seconds: 60
+  sms:
+    provider: ${SMS_PROVIDER:mock}
+    api-key: ${SMS_API_KEY:}
+    sender-id: ${SMS_SENDER_ID:KISANMP}
+  gemini:
+    api-key: ${GEMINI_API_KEY:}
+  weather:
+    api-key: ${WEATHER_API_KEY:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
