@@ -390,16 +390,18 @@ async function startServer() {
 
   // Admin login with secure environment / department verification
   const handleAdminLogin = (req: express.Request, res: express.Response) => {
-    const { officerId, passcode, mandiId } = req.body;
+    const { officerId, passcode, mandiId, username, password } = req.body;
+    const resolvedUsername = username || officerId || 'MP-AGRI-ADMIN-701';
+    const resolvedPassword = password || passcode;
     const configuredPasscode = process.env.ADMIN_PASSCODE || 'admin2026';
     const validCodes = [configuredPasscode, 'admin2026', 'Mandi@Gov2026'];
 
-    if (!validCodes.includes(passcode)) {
+    if (!validCodes.includes(resolvedPassword)) {
       return res.status(401).json({ success: false, error: 'Invalid department passcode. Authorized official credentials required.' });
     }
 
     const targetMandi = mandis.find((m) => m.id === mandiId) || mandis[0];
-    const offId = officerId && officerId.trim() ? officerId.trim().toUpperCase() : 'MP-AGRI-ADMIN-701';
+    const offId = resolvedUsername && resolvedUsername.trim() ? resolvedUsername.trim().toUpperCase() : 'MP-AGRI-ADMIN-701';
 
     const adminUser = {
       name: `Secretary / Officer (${offId})`,
@@ -414,6 +416,11 @@ async function startServer() {
     const token = `admin-jwt-${Date.now()}`;
     res.json({
       success: true,
+      data: {
+        accessToken: token,
+        refreshToken: token,
+        user: adminUser,
+      },
       token,
       admin: adminUser,
       message: 'Official credentials verified successfully',

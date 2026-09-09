@@ -16,6 +16,7 @@ import {
 import { Language, UserRole } from '../types';
 import { translations } from '../i18n/translations';
 import { DEMO_FARMERS, MP_MANDIS } from '../data/mpMandiData';
+import { apiUrl, setAuthToken } from '../services/api';
 
 interface Props {
   isOpen: boolean;
@@ -130,40 +131,29 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/admin-login', {
+      const res = await fetch(apiUrl('/api/v1/auth/admin-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          officerId,
-          passcode: adminPasscode,
-          mandiId: selectedMandiId,
+          username: officerId,
+          password: adminPasscode,
         }),
       });
       const data = await res.json();
-      if (data.success && data.admin) {
-        onLoginSuccess({
-          name: data.admin.name,
-          phone: data.admin.phone,
-          district: data.admin.district,
-          role: 'ADMIN',
-          mandiId: data.admin.mandiId,
-        });
+      if (data.success && data.data) {
+        if (data.data.accessToken) {
+          setAuthToken(data.data.accessToken);
+        }
+        const user = data.data.user;
+        if (user && typeof user.role === 'string' && user.role.startsWith('ROLE_')) {
+          user.role = user.role.replace('ROLE_', '');
+        }
+        onLoginSuccess(user);
       } else {
-        setAdminError(data.error || 'Invalid passcode! (Authorized: admin2026)');
+        setAdminError(data.error || data.message || 'Invalid credentials');
       }
     } catch {
-      if (adminPasscode === 'admin2026' || adminPasscode === '1234') {
-        const mandi = MP_MANDIS.find((m) => m.id === selectedMandiId) || MP_MANDIS[0];
-        onLoginSuccess({
-          name: `Officer (${officerId})`,
-          phone: mandi.phone,
-          district: mandi.district,
-          role: 'ADMIN',
-          mandiId: mandi.id,
-        });
-      } else {
-        setAdminError('Invalid Passcode! (Authorized passcode: admin2026)');
-      }
+      setAdminError('Authentication server unavailable');
     } finally {
       setIsLoading(false);
     }
