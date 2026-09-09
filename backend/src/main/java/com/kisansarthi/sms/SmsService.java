@@ -58,6 +58,12 @@ public class SmsService {
         dispatchSms(phone, farmerName, null, msg, "PAYMENT");
     }
 
+    /** Generic SMS entry point used by queue/payment flows. */
+    @Async
+    public void sendSms(String phone, String farmerName, String message) {
+        dispatchSms(phone, farmerName, null, message, "GENERAL");
+    }
+
     public List<SmsLog> getRecentLogs() {
         return smsLogRepository.findTop50ByOrderByCreatedAtDesc();
     }
