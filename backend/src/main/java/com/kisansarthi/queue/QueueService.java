@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.util.List;
 
@@ -54,7 +55,6 @@ public class QueueService {
 
     @Transactional
     public QueueEventDto advanceQueue(String mandiId, String operatorUsername) {
-        // 1 & 2: Lock queue state with pessimistic write lock
         QueueState queueState = queueStateRepository.findByIdForUpdate(mandiId)
                 .orElseGet(() -> {
                     Mandi mandi = mandiRepository.findById(mandiId)
@@ -73,18 +73,15 @@ public class QueueService {
                     .orElseThrow(() -> new ResourceNotFoundException("Mandi not found: " + mandiId));
         }
 
-        // 3: Advance token sequence
         int nextToken = queueState.getCurrentServingToken() + 1;
         queueState.setCurrentServingToken(nextToken);
 
-        // Decrease waiting count if greater than 0
         if (queueState.getWaitingCount() > 0) {
             queueState.setWaitingCount(queueState.getWaitingCount() - 1);
         }
 
-        // 4: Find next valid booking matching this mandi and date / sequence
         LocalDate today = LocalDate.now();
-        List<Booking> todaysBookings = bookingRepository.findByMandiIdAndScheduledDate(mandiId, today);
+        List<Booking> todaysBookings = bookingRepository.findByMandiIdAndScheduledDateOrderByTokenSequenceAsc(mandiId, today);
         Booking matchedBooking = todaysBookings.stream()
                 .filter(b -> b.getTokenSequence() == nextToken)
                 .findFirst()
@@ -97,14 +94,12 @@ public class QueueService {
                 ? matchedBooking.getTokenNumber()
                 : String.format("MP-%s-%03d", distPrefix, nextToken);
 
-        // 5: Update booking status if exists
         if (matchedBooking != null) {
             matchedBooking.setStatus(BookingStatus.GATE_CALLED);
-            matchedBooking.setUpdatedAt(OffsetDateTime.now());
+            matchedBooking.setUpdatedAt(Instant.now());
             bookingRepository.save(matchedBooking);
             queueState.setActiveBooking(matchedBooking);
 
-            // Send notification SMS to the farmer
             if (matchedBooking.getFarmer() != null) {
                 String farmerPhone = matchedBooking.getFarmer().getPhone();
                 String farmerName = matchedBooking.getFarmer().getName();
@@ -121,12 +116,10 @@ public class QueueService {
         queueState.setUpdatedAt(OffsetDateTime.now());
         queueStateRepository.save(queueState);
 
-        // Also update Mandi table counters
         mandi.setCurrentTokenServing(nextToken);
         mandi.setActiveTokensWaiting(queueState.getWaitingCount());
         mandiRepository.save(mandi);
 
-        // 6 & 7: Record Queue Event
         QueueEvent event = new QueueEvent();
         event.setMandi(mandi);
         event.setBooking(matchedBooking);
@@ -137,7 +130,6 @@ public class QueueService {
         event.setCreatedAt(OffsetDateTime.now());
         queueEventRepository.save(event);
 
-        // 8 & 9: Create and Publish WebSocket event to topics
         QueueEventDto dto = new QueueEventDto();
         dto.setEvent("TOKEN_CALLED");
         dto.setMandiId(mandiId);
