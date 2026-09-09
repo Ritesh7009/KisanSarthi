@@ -77,6 +77,15 @@ export interface CreateBookingPayload {
   waitTimeEstimateMins?: number;
 }
 
+// API base URL: empty by default preserves same-origin/local development.
+// Production deployments can set VITE_API_BASE_URL to the deployed backend origin.
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+
+export const apiUrl = (endpoint: string): string => {
+  if (/^https?:\/\//i.test(endpoint)) return endpoint;
+  return `${API_BASE_URL}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+};
+
 // Token storage helpers
 let authToken: string | null = null;
 
@@ -112,7 +121,7 @@ async function request<T>(
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(endpoint, {
+  const response = await fetch(apiUrl(endpoint), {
     ...options,
     headers,
   });
@@ -438,44 +447,17 @@ export const weatherApi = {
 // 11. AI SERVICES API
 // ==========================================
 export const aiApi = {
-  async slotRecommendation(params: {
-    district: string;
-    mandiName: string;
-    cropName: string;
-    estimatedYieldQuintals: number;
-    harvestDate: string;
-    vehicleType: string;
-  }): Promise<AISlotSuggestion> {
-    const res = await request<{ suggestion: AISlotSuggestion } | AISlotSuggestion>(
-      '/api/v1/ai/slot-recommendation',
-      {
-        method: 'POST',
-        body: JSON.stringify(params),
-      }
-    );
-    return (res as any).suggestion || res;
-  },
-
-  async yieldAdvisor(params: {
-    cropName: string;
-    acreage: number;
-    district: string;
-    estimatedYield?: number;
-  }): Promise<AIYieldAnalysis> {
-    const res = await request<{ analysis: AIYieldAnalysis } | AIYieldAnalysis>(
-      '/api/v1/ai/yield-advisor',
-      {
-        method: 'POST',
-        body: JSON.stringify(params),
-      }
-    );
-    return (res as any).analysis || res;
-  },
-
-  async weatherAdvisor(district: string): Promise<any> {
-    return request('/api/v1/ai/weather-advisor', {
+  async getSlotSuggestion(payload: any): Promise<AISlotSuggestion> {
+    return request<AISlotSuggestion>('/api/v1/ai/slot-suggestion', {
       method: 'POST',
-      body: JSON.stringify({ district }),
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async getYieldAnalysis(payload: any): Promise<AIYieldAnalysis> {
+    return request<AIYieldAnalysis>('/api/v1/ai/yield-analysis', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 };
@@ -484,12 +466,9 @@ export const aiApi = {
 // 12. REPORTS API
 // ==========================================
 export const reportApi = {
-  async getDistrictStats(): Promise<{
-    stats: DistrictProcurementStat[];
-    mandisCount: number;
-    totalBookings: number;
-    registeredFarmersCount: number;
-  }> {
-    return request('/api/v1/reports/district-stats');
+  async getDistrictStats(district?: string): Promise<DistrictProcurementStat[]> {
+    const qs = district ? `?district=${encodeURIComponent(district)}` : '';
+    const res = await request<{ stats: DistrictProcurementStat[] } | DistrictProcurementStat[]>(`/api/v1/reports/district-stats${qs}`);
+    return Array.isArray(res) ? res : res.stats || [];
   },
 };
