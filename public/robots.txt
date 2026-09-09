@@ -1,0 +1,17 @@
+# Robots.txt for KisanSetu MP (Smart Mandi Procurement Portal)
+User-agent: *
+Allow: /
+Allow: /api/mandi-centers
+Allow: /api/crops
+Disallow: /api/admin/
+Disallow: /api/auth/verify-otp
+
+# Search Engine Crawlers
+User-agent: Googlebot
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# Sitemap Location
+Sitemap: https://ais-pre-fhi5k6rihwwdjbfpinunif-239181091180.asia-southeast1.run.app/sitemap.xml
