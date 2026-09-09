@@ -47,7 +47,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
   // Admin form state
   const [officerId, setOfficerId] = useState('MP-AGRI-ADMIN-701');
   const [selectedMandiId, setSelectedMandiId] = useState('mandi-sehore');
-  const [adminPasscode, setAdminPasscode] = useState('admin2026');
+  const [adminPasscode, setAdminPasscode] = useState('');
   const [adminError, setAdminError] = useState('');
 
   if (!isOpen) return null;
@@ -65,17 +65,20 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetch('/api/v1/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone }),
       });
       const data = await res.json();
-      setOtpSent(true);
-      setOtp(data.otp || '4826');
+      if (data.success) {
+        setOtpSent(true);
+        setOtp('');
+      } else {
+        setFarmerError(data.error || 'Failed to dispatch OTP');
+      }
     } catch {
-      setOtpSent(true);
-      setOtp('4826');
+      setFarmerError('Network error. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -83,8 +86,8 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
 
   const handleVerifyFarmerOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp !== '4826' && otp.length < 4) {
-      setFarmerError(language === 'hi' ? 'अमान्य ओटीपी! (डेमो ओटीपी: 4826)' : 'Invalid OTP! Use demo code: 4826');
+    if (otp.trim().length < 4) {
+      setFarmerError(language === 'hi' ? 'अमान्य सत्यापन कोड!' : 'Please enter valid verification code received via SMS');
       return;
     }
 
@@ -92,12 +95,12 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/farmer-login', {
+      const res = await fetch('/api/v1/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: cleanPhone,
-          otp,
+          otp: otp.trim(),
         }),
       });
       const data = await res.json();
@@ -115,16 +118,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
         setFarmerError(data.error || 'Authentication failed');
       }
     } catch {
-      const existing = DEMO_FARMERS.find((f) => f.phone === cleanPhone);
-      onLoginSuccess({
-        name: existing ? existing.name : `Kisan (+91 ${cleanPhone})`,
-        phone: cleanPhone,
-        aadharNumber: '710488214589',
-        maskedAadhar: `XXXX-XXXX-${cleanPhone.slice(-4)}`,
-        district: existing ? existing.district : 'Sehore',
-        village: existing ? existing.village : 'Bilkisganj',
-        role: 'FARMER',
-      });
+      setFarmerError('Authentication server unavailable');
     } finally {
       setIsLoading(false);
     }

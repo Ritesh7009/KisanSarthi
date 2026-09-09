@@ -36,6 +36,7 @@ import {
 } from '../types';
 import { translations } from '../i18n/translations';
 import { STANDARD_TIME_SLOTS } from '../data/mpMandiData';
+import { aiApi } from '../services/api';
 import {
   UserCoordinates,
   MandiWithDistance,
@@ -185,22 +186,19 @@ export const FarmerDashboard: React.FC<Props> = ({
     setAiSlotLoading(true);
     const chosenMandi = mandis.find((m) => m.id === mandiId);
     try {
-      const res = await fetch('/api/ai/optimize-slot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          district,
-          mandiName: chosenMandi?.name,
-          cropName: selectedCrop?.name,
-          estimatedYieldQuintals: estimatedYield,
-          harvestDate,
-          vehicleType,
-        }),
+      const suggestion = await aiApi.slotRecommendation({
+        district,
+        mandiName: chosenMandi?.name || 'Krishi Upaj Mandi Sehore',
+        cropName: selectedCrop?.name || 'Wheat',
+        estimatedYieldQuintals: Number(estimatedYield) || 50,
+        harvestDate,
+        vehicleType,
       });
-      const data = await res.json();
-      if (data.success && data.suggestion) {
-        setAiSlotSuggestion(data.suggestion);
-        setTimeSlot(data.suggestion.recommendedSlot);
+      if (suggestion) {
+        setAiSlotSuggestion(suggestion);
+        if (suggestion.recommendedSlot) {
+          setTimeSlot(suggestion.recommendedSlot);
+        }
       }
     } catch (e) {
       console.warn('AI slot fetch error', e);
@@ -213,19 +211,14 @@ export const FarmerDashboard: React.FC<Props> = ({
   const handleRunAiYieldAdvisor = async () => {
     setAiYieldLoading(true);
     try {
-      const res = await fetch('/api/ai/yield-advisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          cropName: selectedCrop?.name,
-          acreage: calcAcreage,
-          district,
-          estimatedYield: calcAcreage * calcYieldPerAcre,
-        }),
+      const analysis = await aiApi.yieldAdvisor({
+        cropName: selectedCrop?.name || 'Wheat',
+        acreage: calcAcreage,
+        district,
+        estimatedYield: calcAcreage * calcYieldPerAcre,
       });
-      const data = await res.json();
-      if (data.success && data.analysis) {
-        setAiYieldAnalysis(data.analysis);
+      if (analysis) {
+        setAiYieldAnalysis(analysis);
       }
     } catch (e) {
       console.warn('AI yield advisor error', e);

@@ -20,14 +20,25 @@ import {
   saveBookings,
   getStoredNotifications,
   saveNotifications,
-  getPendingBookings,
-  savePendingBooking,
-  clearPendingBookings,
   getStoredLanguage,
   setStoredLanguage,
   getStoredUser,
   setStoredUser,
 } from './utils/offlineStorage';
+import {
+  bookingApi,
+  queueApi,
+  cropApi,
+  slotApi,
+  mandiApi,
+} from './services/api';
+import {
+  enqueueBookingOperation,
+  getPendingOperations,
+  updateOperationStatus,
+  clearSyncedOperations,
+} from './utils/indexedDbQueue';
+import { useMandiRealtime } from './hooks/useMandiRealtime';
 import { translations } from './i18n/translations';
 import { Header } from './components/Header';
 import { SyntheticDataBanner } from './components/SyntheticDataBanner';
@@ -77,7 +88,51 @@ export function App() {
   const [viewingTokenPass, setViewingTokenPass] = useState<SlotBooking | null>(null);
   const [viewingJForm, setViewingJForm] = useState<SlotBooking | null>(null);
 
-  // Monitor network status
+  // Real-time WebSocket connection to active mandi queue
+  const activeMandiId = currentUser?.mandiId || mandis[0]?.id || 'mandi-sehore';
+  useMandiRealtime({
+    mandiId: activeMandiId,
+    enabled: true,
+    onQueueEvent: (event) => {
+      if (event.event === 'TOKEN_CALLED') {
+        setMandis((prev) =>
+          prev.map((m) =>
+            m.id === event.mandiId
+              ? {
+                  ...m,
+                  currentTokenServing: event.currentTokenServing,
+                  activeTokensWaiting: event.activeTokensWaiting,
+                }
+              : m
+          )
+        );
+        if (event.calledBookingId) {
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.id === event.calledBookingId ? { ...b, status: 'GATE_CALLED' } : b
+            )
+          );
+        }
+      } else if (event.event === 'BOOKING_UPDATE' && event.bookingId) {
+        setBookings((prev) =>
+          prev.map((b) =>
+            b.id === event.bookingId ? { ...b, status: event.status } : b
+          )
+        );
+      }
+    },
+  });
+
+  // Monitor network status & sync queue
+  const checkPendingOps = useCallback(async () => {
+    try {
+      const ops = await getPendingOperations();
+      setPendingSyncCount(ops.filter((o) => o.status !== 'SYNCED').length);
+    } catch {
+      // Fallback
+    }
+  }, []);
+
   useEffect(() => {
     const handleOnline = () => {
       setIsOnline(true);
@@ -88,40 +143,29 @@ export function App() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial pending count
-    const pendings = getPendingBookings();
-    setPendingSyncCount(pendings.length);
+    checkPendingOps();
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, []);
+  }, [checkPendingOps]);
 
   // Sync with backend on mount
   useEffect(() => {
     async function fetchData() {
       try {
         const [cropsRes, mandisRes, bookingsRes] = await Promise.all([
-          fetch('/api/crops'),
-          fetch('/api/mandis'),
-          fetch('/api/bookings'),
+          cropApi.getAllCrops(),
+          mandiApi.getAllMandis(),
+          bookingApi.getBookings(),
         ]);
 
-        if (cropsRes.ok) {
-          const cropsData = await cropsRes.json();
-          if (cropsData.crops) setCrops(cropsData.crops);
-        }
-        if (mandisRes.ok) {
-          const mandisData = await mandisRes.json();
-          if (mandisData.mandis) setMandis(mandisData.mandis);
-        }
-        if (bookingsRes.ok) {
-          const bookingsData = await bookingsRes.json();
-          if (bookingsData.bookings && bookingsData.bookings.length > 0) {
-            setBookings(bookingsData.bookings);
-            saveBookings(bookingsData.bookings);
-          }
+        if (cropsRes && cropsRes.length > 0) setCrops(cropsRes);
+        if (mandisRes && mandisRes.length > 0) setMandis(mandisRes);
+        if (bookingsRes && bookingsRes.length > 0) {
+          setBookings(bookingsRes);
+          saveBookings(bookingsRes);
         }
       } catch (err) {
         console.warn('Using local cached mandi data', err);
@@ -130,40 +174,45 @@ export function App() {
     fetchData();
   }, []);
 
-  // Sync pending items
+  // Sync pending items with granular state tracking (Fix Bug 6)
   const triggerSync = useCallback(async () => {
-    const pendings = getPendingBookings();
-    if (pendings.length === 0) return;
+    const pendings = await getPendingOperations();
+    const activeOps = pendings.filter((o) => o.status === 'PENDING' || o.status === 'RETRY');
+    if (activeOps.length === 0) return;
 
-    for (const item of pendings) {
+    for (const op of activeOps) {
+      await updateOperationStatus(op.id, 'SYNCING');
       try {
-        await fetch('/api/bookings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(item),
-        });
-      } catch (e) {
-        console.error('Pending sync item failed', e);
+        const res = await bookingApi.createBooking(op.payload, op.idempotencyKey);
+        if (res) {
+          await updateOperationStatus(op.id, 'SYNCED', undefined, res);
+          // Update client booking with official server-generated token and ID
+          setBookings((prev) =>
+            prev.map((b) => (b.id === op.id ? res : b))
+          );
+        }
+      } catch (err: any) {
+        console.error('Pending sync item failed:', err);
+        const newStatus = op.retryCount + 1 >= op.maxRetries ? 'FAILED' : 'RETRY';
+        await updateOperationStatus(op.id, newStatus, err.message || 'Network failure');
       }
     }
 
-    clearPendingBookings();
-    setPendingSyncCount(0);
+    // Clean up ONLY synced operations (preserves failed/retry records)
+    await clearSyncedOperations();
+    await checkPendingOps();
 
-    // Refresh bookings
+    // Refresh bookings from authoritative server
     try {
-      const res = await fetch('/api/bookings');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.bookings) {
-          setBookings(data.bookings);
-          saveBookings(data.bookings);
-        }
+      const res = await bookingApi.getBookings();
+      if (res && res.length > 0) {
+        setBookings(res);
+        saveBookings(res);
       }
-    } catch (e) {
+    } catch {
       // offline fallback
     }
-  }, []);
+  }, [checkPendingOps]);
 
   // Update language
   const handleLanguageChange = (lang: Language) => {
@@ -198,12 +247,11 @@ export function App() {
     setIsLoginModalOpen(false);
 
     // Refresh bookings from server
-    fetch('/api/bookings')
-      .then((res) => res.json())
+    bookingApi.getBookings({ phone: user.phone })
       .then((data) => {
-        if (data.bookings) {
-          setBookings(data.bookings);
-          saveBookings(data.bookings);
+        if (data && data.length > 0) {
+          setBookings(data);
+          saveBookings(data);
         }
       })
       .catch(() => {});
@@ -231,34 +279,31 @@ export function App() {
     setStoredUser(null);
   };
 
-  // Book a new slot
+  // Book a new slot with Idempotency and Offline Safety (Fix Bug 5)
   const handleBookSlot = async (bookingData: any): Promise<SlotBooking | null> => {
     let created: SlotBooking | null = null;
+    const idempotencyKey = `idemp-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
     if (isOnline) {
       try {
-        const res = await fetch('/api/bookings', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(bookingData),
-        });
-        const data = await res.json();
-        if (data.success && data.booking) {
-          created = data.booking;
+        const res = await bookingApi.createBooking(bookingData, idempotencyKey);
+        if (res) {
+          created = res;
         }
       } catch (e) {
-        console.warn('Network error, saving offline', e);
+        console.warn('Network error, queuing offline', e);
       }
     }
 
     if (!created) {
-      // Offline fallback creation
-      const seq = bookings.length + 42;
-      const numStr = String(seq).padStart(3, '0');
+      // Offline fallback: create temporary pending booking WITHOUT fake official MP token (Fix Bug 5)
+      const op = await enqueueBookingOperation(bookingData, idempotencyKey);
+      await checkPendingOps();
+
       created = {
-        id: `booking-${Date.now()}`,
-        tokenNumber: `MP-${bookingData.district.slice(0, 3).toUpperCase()}-${numStr}`,
-        tokenSequence: seq,
+        id: op.id,
+        tokenNumber: 'PENDING_SYNC', // Never fake official MP-... token locally!
+        tokenSequence: 0,
         farmerId: bookingData.farmerId || 'farmer-01',
         farmerName: bookingData.farmerName,
         farmerPhone: bookingData.farmerPhone,
@@ -276,14 +321,11 @@ export function App() {
         vehicleType: bookingData.vehicleType,
         vehicleNumber: bookingData.vehicleNumber,
         status: 'BOOKED',
-        qrCodeData: `https://euparjan.mp.gov.in/gate-pass?t=MP-${bookingData.district.slice(0, 3).toUpperCase()}-${numStr}`,
+        qrCodeData: `https://euparjan.mp.gov.in/gate-pass?t=PENDING_SYNC&id=${op.id}`,
         createdAt: new Date().toISOString(),
         paymentStatus: 'PENDING',
         waitTimeEstimateMins: 20,
       };
-
-      savePendingBooking(bookingData);
-      setPendingSyncCount((c) => c + 1);
     }
 
     const updated = [created, ...bookings];
@@ -294,10 +336,18 @@ export function App() {
     const smsNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
       type: 'SMS',
-      title: `e-Token Generated: ${created.tokenNumber}`,
-      message: `Dear ${created.farmerName}, your slot at ${created.mandiCenterName} is confirmed for ${created.scheduledDate} (${created.timeSlot}). Token: ${created.tokenNumber}. Vehicle: ${created.vehicleNumber}. Show QR at Gate.`,
-      hindiTitle: `ई-टोकन जारी: ${created.tokenNumber}`,
-      hindiMessage: `प्रिय ${created.farmerName}, ${created.mandiCenterName} में आपका स्लॉट दिनांक ${created.scheduledDate} (${created.timeSlot}) हेतु पुष्ट है। टोकन: ${created.tokenNumber}। गेट पर क्यूआर दिखाएं।`,
+      title: created.tokenNumber === 'PENDING_SYNC'
+        ? `e-Token Queued: Pending Sync`
+        : `e-Token Generated: ${created.tokenNumber}`,
+      message: created.tokenNumber === 'PENDING_SYNC'
+        ? `Dear ${created.farmerName}, your slot request is saved offline. Official token will be generated once connected to internet.`
+        : `Dear ${created.farmerName}, your slot at ${created.mandiCenterName} is confirmed for ${created.scheduledDate} (${created.timeSlot}). Token: ${created.tokenNumber}. Vehicle: ${created.vehicleNumber}. Show QR at Gate.`,
+      hindiTitle: created.tokenNumber === 'PENDING_SYNC'
+        ? `ई-टोकन कतारबद्ध: सिंक लंबित`
+        : `ई-टोकन जारी: ${created.tokenNumber}`,
+      hindiMessage: created.tokenNumber === 'PENDING_SYNC'
+        ? `प्रिय ${created.farmerName}, आपका स्लॉट ऑफलाइन सुरक्षित है। इंटरनेट कनेक्ट होने पर आधिकारिक टोकन जारी किया जाएगा।`
+        : `प्रिय ${created.farmerName}, ${created.mandiCenterName} में आपका स्लॉट दिनांक ${created.scheduledDate} (${created.timeSlot}) हेतु पुष्ट है। टोकन: ${created.tokenNumber}। गेट पर क्यूआर दिखाएं।`,
       timestamp: new Date().toISOString(),
       read: false,
       senderTag: 'VK-EUPARJAN',
@@ -310,34 +360,46 @@ export function App() {
     return created;
   };
 
-  // Admin calls next token
+  // Admin calls next token (Server Authoritative - Fix Bug 2)
   const handleCallNextToken = async (mandiId: string) => {
     let nextNum = 39;
-    if (isOnline) {
-      try {
-        const res = await fetch(`/api/mandis/${mandiId}/call-next`, {
-          method: 'POST',
-        });
-        const data = await res.json();
-        if (data.success && data.currentTokenServing) {
-          nextNum = data.currentTokenServing;
+    try {
+      const res = await queueApi.callNextToken(mandiId);
+      if (res.currentTokenServing !== undefined) {
+        nextNum = res.currentTokenServing;
+        setMandis((prev) =>
+          prev.map((m) =>
+            m.id === mandiId
+              ? {
+                  ...m,
+                  currentTokenServing: res.currentTokenServing,
+                  activeTokensWaiting: res.activeTokensWaiting,
+                }
+              : m
+          )
+        );
+        if (res.calledBookingId) {
+          setBookings((prev) =>
+            prev.map((b) =>
+              b.id === res.calledBookingId ? { ...b, status: 'GATE_CALLED' } : b
+            )
+          );
         }
-      } catch (e) {
-        console.warn('API call next error', e);
       }
+    } catch (e) {
+      console.warn('API call next error:', e);
+      setMandis((prev) =>
+        prev.map((m) =>
+          m.id === mandiId
+            ? {
+                ...m,
+                currentTokenServing: m.currentTokenServing + 1,
+                activeTokensWaiting: Math.max(0, m.activeTokensWaiting - 1),
+              }
+            : m
+        )
+      );
     }
-
-    setMandis((prev) =>
-      prev.map((m) =>
-        m.id === mandiId
-          ? {
-              ...m,
-              currentTokenServing: m.currentTokenServing + 1,
-              activeTokensWaiting: Math.max(0, m.activeTokensWaiting - 1),
-            }
-          : m
-      )
-    );
 
     // Trigger SMS to farmer
     const smsNotif: NotificationItem = {
@@ -356,33 +418,32 @@ export function App() {
     setNotifications(updatedNotifs);
     saveNotifications(updatedNotifs);
 
-    // Play subtle audio / vibrate feedback
     if (navigator.vibrate) {
       navigator.vibrate([100, 50, 100]);
     }
   };
 
-  // Update booking status
+  // Update booking status with strict state machine validation (Fix Bug 1 & 13)
   const handleUpdateBookingStatus = async (bookingId: string, updates: Partial<SlotBooking>) => {
-    if (isOnline) {
-      try {
-        await fetch(`/api/bookings/${bookingId}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updates),
-        });
-      } catch (e) {
-        console.warn('Booking patch error', e);
-      }
-    }
+    try {
+      const res = await bookingApi.updateBookingStatus(bookingId, updates);
+      const serverUpdated = res;
 
-    const updated = bookings.map((b) => (b.id === bookingId ? { ...b, ...updates } : b));
-    setBookings(updated);
-    saveBookings(updated);
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, ...(serverUpdated || updates) } : b))
+      );
+      saveBookings(bookings);
+    } catch (e) {
+      console.warn('Booking status update error:', e);
+      // Fallback local update
+      setBookings((prev) =>
+        prev.map((b) => (b.id === bookingId ? { ...b, ...updates } : b))
+      );
+    }
 
     // If payment DBT completed, generate SMS
     if (updates.status === 'COMPLETED' || updates.paymentStatus === 'DBT_INITIATED') {
-      const target = updated.find((b) => b.id === bookingId);
+      const target = bookings.find((b) => b.id === bookingId);
       if (target) {
         const dbtNotif: NotificationItem = {
           id: `notif-${Date.now()}`,
@@ -401,18 +462,15 @@ export function App() {
     }
   };
 
-  // Update MSP
+  // Update MSP with canonical field names (Fix Bug 3)
   const handleUpdateMsp = async (cropId: string, standardMsp: number, mpBonus: number) => {
-    if (isOnline) {
-      try {
-        await fetch(`/api/crops/${cropId}/msp`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ standardMsp, mpBonus }),
-        });
-      } catch (e) {
-        console.warn('MSP update API error', e);
-      }
+    try {
+      await cropApi.updateMsp(cropId, {
+        standardMspPerQuintal: standardMsp,
+        mpBonusPerQuintal: mpBonus,
+      });
+    } catch (e) {
+      console.warn('MSP update API error', e);
     }
 
     setCrops((prev) =>
@@ -429,18 +487,12 @@ export function App() {
     );
   };
 
-  // Update slot capacity
+  // Update slot capacity (Fix Bug 4)
   const handleUpdateSlotCapacity = async (timeSlot: string, maxVehicles: number, status: any) => {
-    if (isOnline) {
-      try {
-        await fetch('/api/slots/capacity', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ timeSlot, maxVehicles, status }),
-        });
-      } catch (e) {
-        console.warn('Slot capacity API error', e);
-      }
+    try {
+      await slotApi.updateSlotCapacity(timeSlot, maxVehicles, status);
+    } catch (e) {
+      console.warn('Slot capacity API error', e);
     }
   };
 

@@ -52,13 +52,13 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
 
   // Admin form state
   const [officerId, setOfficerId] = useState('MP-AGRI-ADMIN-701');
-  const [adminPasscode, setAdminPasscode] = useState('admin2026');
+  const [adminPasscode, setAdminPasscode] = useState('');
   const [selectedMandiId, setSelectedMandiId] = useState('mandi-sehore');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
   const cleanPhone = phone.replace(/\D/g, '');
 
-  // Step 1: Send OTP to Mobile Number
+  // Step 1: Send OTP to Mobile Number (Securely without leaking OTP in response)
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cleanPhone.length < 10) {
@@ -74,7 +74,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/send-otp', {
+      const res = await fetch('/api/v1/auth/send-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone }),
@@ -82,19 +82,22 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
       const data = await res.json();
       if (data.success) {
         setOtpSent(true);
-        setOtp(data.otp || '4826');
+        setOtp('');
         setStatusNotification(
           language === 'hi'
-            ? `ओटीपी +91 ${cleanPhone} पर प्रेषित। त्वरित सत्यापन हेतु कोड: ${data.otp || '4826'}`
-            : `SMS OTP dispatched to +91 ${cleanPhone}. Quick test code: ${data.otp || '4826'}`
+            ? `ओटीपी +91 ******${cleanPhone.slice(-4)} पर प्रेषित। 5 मिनट के भीतर 6-अंकीय कोड दर्ज करें।`
+            : `SMS OTP dispatched to +91 ******${cleanPhone.slice(-4)}. Enter the 6-digit verification code.`
         );
       } else {
         setErrorMessage(data.error || 'Failed to dispatch OTP');
       }
     } catch {
-      // Offline / fallback behavior
-      setOtpSent(true);
-      setOtp('4826');
+      // Network failure
+      setErrorMessage(
+        language === 'hi'
+          ? 'नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।'
+          : 'Network error. Please try again.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -103,11 +106,11 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
   // Step 2: Verify Mobile OTP & Login
   const handleVerifyFarmerOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (otp !== '4826' && otp.length < 4) {
+    if (otp.trim().length < 4) {
       setErrorMessage(
         language === 'hi'
-          ? 'अमान्य ओटीपी कोड! (परीक्षण कोड: 4826)'
-          : 'Invalid OTP code! (Use test code: 4826)'
+          ? 'कृपया मान्य सत्यापन कोड दर्ज करें'
+          : 'Please enter the verification code received via SMS'
       );
       return;
     }
@@ -116,12 +119,12 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/farmer-login', {
+      const res = await fetch('/api/v1/auth/verify-otp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           phone: cleanPhone,
-          otp,
+          otp: otp.trim(),
         }),
       });
 
@@ -140,17 +143,11 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
         setErrorMessage(data.error || 'Authentication failed');
       }
     } catch {
-      // Fallback local registration
-      const existing = DEMO_FARMERS.find((f) => f.phone === cleanPhone);
-      onLoginSuccess({
-        name: existing ? existing.name : `Kisan (+91 ${cleanPhone})`,
-        phone: cleanPhone,
-        aadharNumber: '710488214589',
-        maskedAadhar: `XXXX-XXXX-${cleanPhone.slice(-4)}`,
-        district: existing ? existing.district : 'Sehore',
-        village: existing ? existing.village : 'Bilkisganj',
-        role: 'FARMER',
-      });
+      setErrorMessage(
+        language === 'hi'
+          ? 'सर्वर से कनेक्ट करने में असमर्थ'
+          : 'Unable to connect to authentication server'
+      );
     } finally {
       setIsLoading(false);
     }

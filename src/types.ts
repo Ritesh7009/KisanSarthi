@@ -44,6 +44,7 @@ export interface MandiCenter {
 
 export type BookingStatus =
   | 'BOOKED'
+  | 'GATE_CALLED'
   | 'GATE_ENTERED'
   | 'WEIGHBRIDGE_GROSS'
   | 'QC_INSPECTION'
@@ -198,7 +199,7 @@ export interface SmsLogItem {
   message: string;
   senderHeader: string; // e.g. "VK-EUPARJAN"
   dltTemplateId: string;
-  status: 'DELIVERED' | 'SENT';
+  status: 'DELIVERED' | 'SENT' | 'FAILED' | 'PENDING';
   dispatchedAt: string;
   dispatchedBy: string; // e.g. "Admin (Mandi Secretary, Sehore)"
   channel: 'SMS_GATEWAY' | 'WEB_SMS' | 'SIM_DIRECT';
