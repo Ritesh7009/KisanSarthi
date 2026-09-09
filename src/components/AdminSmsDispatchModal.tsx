@@ -15,7 +15,7 @@ import {
   Search,
 } from 'lucide-react';
 import { Language, FarmerProfile, SmsLogItem } from '../types';
-import { apiUrl } from '../services/api';
+import { apiUrl, getAuthToken } from '../services/api';
 
 interface Props {
   isOpen: boolean;
@@ -92,7 +92,11 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
 
   const fetchFarmers = async () => {
     try {
-      const res = await fetch(apiUrl('/api/v1/farmers'));
+      const res = await fetch(apiUrl('/api/v1/farmers'), {
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
+      });
       const data = await res.json();
       if (data.success && data.farmers) {
         setFarmers(data.farmers);
@@ -121,7 +125,11 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
   const fetchLogs = async () => {
     setIsLoadingLogs(true);
     try {
-      const res = await fetch(apiUrl('/api/v1/sms/logs'));
+      const res = await fetch(apiUrl('/api/v1/sms/logs'), {
+        headers: {
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
+      });
       const data = await res.json();
       if (data.success && data.logs) {
         setRecentLogs(data.logs);
@@ -178,7 +186,10 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
     try {
       const res = await fetch(apiUrl('/api/v1/sms/send'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
         body: JSON.stringify({
           recipientPhone: phoneToSend,
           farmerName: customFarmerName,
@@ -219,7 +230,10 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
     try {
       await fetch(apiUrl('/api/v1/sms/send'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getAuthToken()}`,
+        },
         body: JSON.stringify({
           recipientPhone: phoneToSend,
           farmerName: customFarmerName,

@@ -48,6 +48,7 @@ import {
 import { translations } from '../i18n/translations';
 import { DISTRICT_PROCUREMENT_STATS, STANDARD_TIME_SLOTS } from '../data/mpMandiData';
 import { AdminSmsDispatchModal } from './AdminSmsDispatchModal';
+import { apiUrl, getAuthToken } from '../services/api';
 
 interface Props {
   language: Language;
@@ -91,9 +92,13 @@ export const AdminDashboard: React.FC<Props> = ({
   // Fetch registered farmers from persistent database
   const fetchDbFarmers = async () => {
     try {
-      const res = await fetch('/api/farmers');
+      const token = getAuthToken();
+      const res = await fetch(apiUrl('/api/v1/farmers'), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const data = await res.json();
-      if (data.success && data.farmers) setRegisteredFarmers(data.farmers);
+      const farmersList = data.farmers || data.data || (Array.isArray(data) ? data : []);
+      if (farmersList && Array.isArray(farmersList)) setRegisteredFarmers(farmersList);
     } catch (e) {
       console.error('Failed to load farmers from database', e);
     }
@@ -102,9 +107,13 @@ export const AdminDashboard: React.FC<Props> = ({
   // Fetch real SMS dispatch history
   const fetchDbLogs = async () => {
     try {
-      const res = await fetch('/api/sms/logs');
+      const token = getAuthToken();
+      const res = await fetch(apiUrl('/api/v1/sms/logs'), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       const data = await res.json();
-      if (data.success && data.logs) setSmsLogs(data.logs);
+      const logsList = data.logs || data.data || (Array.isArray(data) ? data : []);
+      if (logsList && Array.isArray(logsList)) setSmsLogs(logsList);
     } catch (e) {
       console.error('Failed to load SMS logs', e);
     }

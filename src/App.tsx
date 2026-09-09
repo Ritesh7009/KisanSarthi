@@ -31,6 +31,7 @@ import {
   cropApi,
   slotApi,
   mandiApi,
+  setAuthToken,
 } from './services/api';
 import {
   enqueueBookingOperation,
@@ -275,6 +276,7 @@ export function App() {
   };
 
   const handleLogout = () => {
+    setAuthToken(null);
     setCurrentUser(null);
     setStoredUser(null);
   };

@@ -376,59 +376,23 @@ async function startServer() {
       farmers.unshift(farmer);
     }
 
-    const token = `jwt-token-${cleanPhone}-${Date.now()}`;
-    res.json({
-      success: true,
-      token,
-      farmer,
-      message: 'Farmer authenticated successfully',
+    // Deprecated mock token generation removed - production authentication is handled exclusively by Spring Boot backend
+    res.status(403).json({
+      success: false,
+      error: 'Mock OTP authentication disabled. Farmer authentication must be routed directly to the Spring Boot backend.',
     });
   };
 
-  app.post('/api/v1/auth/verify-otp', handleVerifyOtp);
-  app.post('/api/auth/farmer-login', handleVerifyOtp);
-
-  // Admin login with secure environment / department verification
-  const handleAdminLogin = (req: express.Request, res: express.Response) => {
-    const { officerId, passcode, mandiId, username, password } = req.body;
-    const resolvedUsername = username || officerId || 'MP-AGRI-ADMIN-701';
-    const resolvedPassword = password || passcode;
-    const configuredPasscode = process.env.ADMIN_PASSCODE || 'admin2026';
-    const validCodes = [configuredPasscode, 'admin2026', 'Mandi@Gov2026'];
-
-    if (!validCodes.includes(resolvedPassword)) {
-      return res.status(401).json({ success: false, error: 'Invalid department passcode. Authorized official credentials required.' });
-    }
-
-    const targetMandi = mandis.find((m) => m.id === mandiId) || mandis[0];
-    const offId = resolvedUsername && resolvedUsername.trim() ? resolvedUsername.trim().toUpperCase() : 'MP-AGRI-ADMIN-701';
-
-    const adminUser = {
-      name: `Secretary / Officer (${offId})`,
-      officerId: offId,
-      phone: targetMandi.phone || '07562-224810',
-      district: targetMandi.district,
-      role: 'ADMIN' as const,
-      mandiId: targetMandi.id,
-      mandiName: targetMandi.name,
-    };
-
-    const token = `admin-jwt-${Date.now()}`;
-    res.json({
-      success: true,
-      data: {
-        accessToken: token,
-        refreshToken: token,
-        user: adminUser,
-      },
-      token,
-      admin: adminUser,
-      message: 'Official credentials verified successfully',
+  // Mock endpoints disabled to prevent overriding or intercepting requests to the Render Spring Boot backend
+  const handleDisabledMockAuth = (_req: express.Request, res: express.Response) => {
+    res.status(403).json({
+      success: false,
+      error: 'Mock authentication is disabled. Authentication must proceed directly through the production Spring Boot service at https://kisansarthi-vsne.onrender.com',
     });
   };
 
-  app.post('/api/v1/auth/admin-login', handleAdminLogin);
-  app.post('/api/auth/admin-login', handleAdminLogin);
+  app.post('/api/v1/auth/admin-login', handleDisabledMockAuth);
+  app.post('/api/auth/admin-login', handleDisabledMockAuth);
 
   // ==========================================
   // 2. CROPS & MSP MANAGEMENT

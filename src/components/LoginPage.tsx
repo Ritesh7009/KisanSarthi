@@ -22,6 +22,7 @@ import {
 import { Language, UserRole } from '../types';
 import { translations } from '../i18n/translations';
 import { DEMO_FARMERS, MP_MANDIS, MP_CROPS } from '../data/mpMandiData';
+import { apiUrl, setAuthToken } from '../services/api';
 
 interface Props {
   language: Language;
@@ -52,7 +53,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
 
   // Admin form state
   const [officerId, setOfficerId] = useState('MP-AGRI-ADMIN-701');
-  const [adminPasscode, setAdminPasscode] = useState('');
+  const [adminPasscode, setAdminPasscode] = useState('Admin@MPMandi2026');
   const [selectedMandiId, setSelectedMandiId] = useState('mandi-sehore');
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(null);
 
@@ -74,7 +75,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/v1/auth/send-otp', {
+      const res = await fetch(apiUrl('/api/v1/auth/send-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone }),
@@ -119,7 +120,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
+      const res = await fetch(apiUrl('/api/v1/auth/verify-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -129,18 +130,23 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
       });
 
       const data = await res.json();
-      if (data.success && data.farmer) {
+      if (data.success && (data.data || data.farmer)) {
+        const token = data.data?.accessToken || data.accessToken || data.token;
+        if (token) {
+          setAuthToken(token);
+        }
+        const farmerUser = data.data?.user || data.farmer;
         onLoginSuccess({
-          name: data.farmer.name,
-          phone: data.farmer.phone,
-          aadharNumber: data.farmer.aadharNumber,
-          maskedAadhar: data.farmer.maskedAadhar,
-          district: data.farmer.district,
-          village: data.farmer.village,
+          name: farmerUser.name,
+          phone: farmerUser.phone,
+          aadharNumber: farmerUser.aadharNumber,
+          maskedAadhar: farmerUser.maskedAadhar,
+          district: farmerUser.district,
+          village: farmerUser.village,
           role: 'FARMER',
         });
       } else {
-        setErrorMessage(data.error || 'Authentication failed');
+        setErrorMessage(data.error || data.message || 'Authentication failed');
       }
     } catch {
       setErrorMessage(
@@ -160,46 +166,51 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/auth/admin-login', {
+      const res = await fetch(apiUrl('/api/v1/auth/admin-login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          officerId,
-          passcode: adminPasscode,
-          mandiId: selectedMandiId,
+          username: officerId,
+          password: adminPasscode,
         }),
       });
 
       const data = await res.json();
-      if (data.success && data.admin) {
+      if (data.success && data.data) {
+        if (data.data.accessToken) {
+          setAuthToken(data.data.accessToken);
+        }
+        const user = { ...data.data.user };
+        if (user && typeof user.role === 'string' && user.role.startsWith('ROLE_')) {
+          user.role = user.role.replace('ROLE_', '');
+        }
+        const normalizedRole: UserRole =
+          user.role === 'ADMIN' || user.role?.includes('ADMIN') || user.role?.includes('MANDI')
+            ? 'ADMIN'
+            : 'FARMER';
         onLoginSuccess({
-          name: data.admin.name,
-          phone: data.admin.phone,
-          district: data.admin.district,
-          role: 'ADMIN',
-          mandiId: data.admin.mandiId,
+          ...user,
+          name: user.name || `Officer (${officerId})`,
+          phone: user.phone || '07562-224810',
+          district: user.district || 'Sehore',
+          role: normalizedRole,
+          mandiId: user.mandiId ? String(user.mandiId) : selectedMandiId,
         });
       } else {
         setErrorMessage(
           data.error ||
+            data.message ||
             (language === 'hi'
-              ? 'अमान्य पासकोड! अधिकृत पासकोड: admin2026'
-              : 'Invalid passcode! Authorized passcode: admin2026')
+              ? 'अमान्य पासकोड! अधिकृत पासकोड: Admin@MPMandi2026'
+              : 'Invalid passcode! Authorized passcode: Admin@MPMandi2026')
         );
       }
     } catch {
-      if (adminPasscode === 'admin2026' || adminPasscode === '1234') {
-        const mandi = MP_MANDIS.find((m) => m.id === selectedMandiId) || MP_MANDIS[0];
-        onLoginSuccess({
-          name: `Officer (${officerId})`,
-          phone: mandi.phone,
-          district: mandi.district,
-          role: 'ADMIN',
-          mandiId: mandi.id,
-        });
-      } else {
-        setErrorMessage(language === 'hi' ? 'अमान्य विभागीय पासकोड' : 'Invalid department passcode');
-      }
+      setErrorMessage(
+        language === 'hi'
+          ? 'प्रमाणीकरण सर्वर अनुपलब्ध है'
+          : 'Authentication server unavailable'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -480,7 +491,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
                   <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                   <div>
                     <span className="font-bold">Official Department Passcode:</span>{' '}
-                    <strong className="font-mono bg-amber-100 px-1 py-0.5 rounded text-slate-900">admin2026</strong>
+                    <strong className="font-mono bg-amber-100 px-1 py-0.5 rounded text-slate-900">Admin@MPMandi2026</strong>
                   </div>
                 </div>
 

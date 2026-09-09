@@ -91,16 +91,26 @@ let authToken: string | null = null;
 export const setAuthToken = (token: string | null) => {
   authToken = token;
   if (token) {
-    sessionStorage.setItem('ks_auth_token', token);
+    try {
+      sessionStorage.setItem('ks_auth_token', token);
+    } catch {}
   } else {
-    sessionStorage.removeItem('ks_auth_token');
+    try {
+      sessionStorage.removeItem('ks_auth_token');
+    } catch {}
   }
 };
 
 export const getAuthToken = (): string | null => {
-  if (!authToken) {
-    authToken = sessionStorage.getItem('ks_auth_token');
-  }
+  try {
+    if (typeof sessionStorage !== 'undefined') {
+      const stored = sessionStorage.getItem('ks_auth_token');
+      if (stored) {
+        authToken = stored;
+        return stored;
+      }
+    }
+  } catch {}
   return authToken;
 };
 
@@ -152,30 +162,32 @@ export const authApi = {
     });
   },
 
-  async verifyOtp(phone: string, otp: string): Promise<{ success: boolean; farmer: FarmerProfile; token?: string }> {
-    const res = await request<{ success: boolean; farmer: FarmerProfile; token?: string; accessToken?: string }>(
+  async verifyOtp(phone: string, otp: string): Promise<{ success: boolean; farmer?: FarmerProfile; token?: string; data?: any }> {
+    const res = await request<any>(
       '/api/v1/auth/verify-otp',
       {
         method: 'POST',
         body: JSON.stringify({ phone, otp }),
       }
     );
-    if (res.token || res.accessToken) {
-      setAuthToken(res.token || res.accessToken || null);
+    const token = res.data?.accessToken || res.accessToken || res.token;
+    if (token) {
+      setAuthToken(token);
     }
     return res;
   },
 
-  async adminLogin(officerId: string, passcode: string, mandiId: string): Promise<{ success: boolean; admin: any; token?: string }> {
-    const res = await request<{ success: boolean; admin: any; token?: string; accessToken?: string }>(
+  async adminLogin(officerId: string, passcode: string, mandiId?: string): Promise<{ success: boolean; admin?: any; data?: any; token?: string }> {
+    const res = await request<any>(
       '/api/v1/auth/admin-login',
       {
         method: 'POST',
-        body: JSON.stringify({ officerId, passcode, mandiId }),
+        body: JSON.stringify({ username: officerId, password: passcode }),
       }
     );
-    if (res.token || res.accessToken) {
-      setAuthToken(res.token || res.accessToken || null);
+    const token = res.data?.accessToken || res.accessToken || res.token;
+    if (token) {
+      setAuthToken(token);
     }
     return res;
   },

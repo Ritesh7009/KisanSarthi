@@ -48,7 +48,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
   // Admin form state
   const [officerId, setOfficerId] = useState('MP-AGRI-ADMIN-701');
   const [selectedMandiId, setSelectedMandiId] = useState('mandi-sehore');
-  const [adminPasscode, setAdminPasscode] = useState('');
+  const [adminPasscode, setAdminPasscode] = useState('Admin@MPMandi2026');
   const [adminError, setAdminError] = useState('');
 
   if (!isOpen) return null;
@@ -66,7 +66,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/v1/auth/send-otp', {
+      const res = await fetch(apiUrl('/api/v1/auth/send-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone: cleanPhone }),
@@ -96,7 +96,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/v1/auth/verify-otp', {
+      const res = await fetch(apiUrl('/api/v1/auth/verify-otp'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -105,18 +105,23 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
         }),
       });
       const data = await res.json();
-      if (data.success && data.farmer) {
+      if (data.success && (data.data || data.farmer)) {
+        const token = data.data?.accessToken || data.accessToken || data.token;
+        if (token) {
+          setAuthToken(token);
+        }
+        const farmerUser = data.data?.user || data.farmer;
         onLoginSuccess({
-          name: data.farmer.name,
-          phone: data.farmer.phone,
-          aadharNumber: data.farmer.aadharNumber,
-          maskedAadhar: data.farmer.maskedAadhar,
-          district: data.farmer.district,
-          village: data.farmer.village,
+          name: farmerUser.name,
+          phone: farmerUser.phone,
+          aadharNumber: farmerUser.aadharNumber,
+          maskedAadhar: farmerUser.maskedAadhar,
+          district: farmerUser.district,
+          village: farmerUser.village,
           role: 'FARMER',
         });
       } else {
-        setFarmerError(data.error || 'Authentication failed');
+        setFarmerError(data.error || data.message || 'Authentication failed');
       }
     } catch {
       setFarmerError('Authentication server unavailable');
@@ -144,11 +149,22 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
         if (data.data.accessToken) {
           setAuthToken(data.data.accessToken);
         }
-        const user = data.data.user;
+        const user = { ...data.data.user };
         if (user && typeof user.role === 'string' && user.role.startsWith('ROLE_')) {
           user.role = user.role.replace('ROLE_', '');
         }
-        onLoginSuccess(user);
+        const normalizedRole: UserRole =
+          user.role === 'ADMIN' || user.role?.includes('ADMIN') || user.role?.includes('MANDI')
+            ? 'ADMIN'
+            : 'FARMER';
+        onLoginSuccess({
+          ...user,
+          name: user.name || `Officer (${officerId})`,
+          phone: user.phone || '07562-224810',
+          district: user.district || 'Sehore',
+          role: normalizedRole,
+          mandiId: user.mandiId ? String(user.mandiId) : selectedMandiId,
+        });
       } else {
         setAdminError(data.error || data.message || 'Invalid credentials');
       }
@@ -347,7 +363,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
                 <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold">Passcode:</span>{' '}
-                  <span className="font-mono bg-amber-100 px-1 py-0.5 rounded font-bold">admin2026</span>
+                  <span className="font-mono bg-amber-100 px-1 py-0.5 rounded font-bold">Admin@MPMandi2026</span>
                 </div>
               </div>
 
