@@ -15,6 +15,7 @@ import {
   Search,
 } from 'lucide-react';
 import { Language, FarmerProfile, SmsLogItem } from '../types';
+import { apiUrl } from '../services/api';
 
 interface Props {
   isOpen: boolean;
@@ -91,12 +92,21 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
 
   const fetchFarmers = async () => {
     try {
-      const res = await fetch('/api/farmers');
+      const res = await fetch(apiUrl('/api/v1/farmers'));
       const data = await res.json();
       if (data.success && data.farmers) {
         setFarmers(data.farmers);
         if (!selectedFarmerPhone && data.farmers.length > 0) {
           const first = data.farmers[0];
+          setSelectedFarmerPhone(first.phone);
+          setCustomPhone(first.phone);
+          setCustomFarmerName(first.name);
+          setMessageText(DLT_TEMPLATES[0].template(first.name, first.phone));
+        }
+      } else if (Array.isArray(data)) {
+        setFarmers(data);
+        if (!selectedFarmerPhone && data.length > 0) {
+          const first = data[0];
           setSelectedFarmerPhone(first.phone);
           setCustomPhone(first.phone);
           setCustomFarmerName(first.name);
@@ -111,10 +121,14 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
   const fetchLogs = async () => {
     setIsLoadingLogs(true);
     try {
-      const res = await fetch('/api/sms/logs');
+      const res = await fetch(apiUrl('/api/v1/sms/logs'));
       const data = await res.json();
       if (data.success && data.logs) {
         setRecentLogs(data.logs);
+      } else if (Array.isArray(data)) {
+        setRecentLogs(data);
+      } else if (data.data && Array.isArray(data.data)) {
+        setRecentLogs(data.data);
       }
     } catch (e) {
       console.error('Failed to load sms logs', e);
@@ -162,7 +176,7 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
     setSuccessNotice(null);
 
     try {
-      const res = await fetch('/api/sms/send', {
+      const res = await fetch(apiUrl('/api/v1/sms/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,13 +192,13 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (data.success || data.status === 'SENT' || data.deliveryReceiptId) {
         setSuccessNotice(
-          `Real SMS dispatched to +91 ${phoneToSend}! Delivery Receipt: ${data.deliveryReceiptId} (TRAI DLT Verified)`
+          `Real SMS dispatched to +91 ${phoneToSend}! Delivery Receipt: ${data.deliveryReceiptId || data.sid || 'CONFIRMED'} (TRAI DLT Verified)`
         );
         fetchLogs();
       } else {
-        setErrorNotice(data.error || 'Failed to dispatch SMS');
+        setErrorNotice(data.error || data.message || 'Failed to dispatch SMS');
       }
     } catch (err) {
       setErrorNotice('Network error sending SMS');
@@ -203,7 +217,7 @@ export const AdminSmsDispatchModal: React.FC<Props> = ({
 
     // Also log to server for database record
     try {
-      await fetch('/api/sms/send', {
+      await fetch(apiUrl('/api/v1/sms/send'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

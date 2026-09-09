@@ -33,8 +33,20 @@ public class TwilioSmsProvider implements SmsProvider {
 
     @Override
     public String sendSms(String recipientPhone, String message, String senderHeader) {
+        String phoneToUse = recipientPhone != null ? recipientPhone.trim() : "";
+        if (!phoneToUse.startsWith("+")) {
+            String digits = phoneToUse.replaceAll("\\D", "");
+            if (digits.length() == 10) {
+                phoneToUse = "+91" + digits;
+            } else if (digits.length() == 12 && digits.startsWith("91")) {
+                phoneToUse = "+" + digits;
+            } else if (!digits.isEmpty()) {
+                phoneToUse = "+91" + digits;
+            }
+        }
+
         Message sent = Message.creator(
-                new PhoneNumber(recipientPhone),
+                new PhoneNumber(phoneToUse),
                 new PhoneNumber(fromNumber),
                 message
         ).create();

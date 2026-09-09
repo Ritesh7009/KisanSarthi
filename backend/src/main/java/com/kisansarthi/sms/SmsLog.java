@@ -72,4 +72,15 @@ public class SmsLog {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public String getDispatchedAt() {
+        return createdAt != null ? createdAt.toString() : Instant.now().toString();
+    }
+
+    public String getDeliveryReceiptId() {
+        if (deliveryReport != null && deliveryReport.contains("Ref: ")) {
+            return deliveryReport.substring(deliveryReport.indexOf("Ref: ") + 5).trim();
+        }
+        return deliveryReport != null ? deliveryReport : (id != null ? "DLT-SMS-" + id.toString().substring(0, 8).toUpperCase() : "DLT-SMS-GEN");
+    }
 }

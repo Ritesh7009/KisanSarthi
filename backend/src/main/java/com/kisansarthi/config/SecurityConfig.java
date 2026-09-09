@@ -53,6 +53,7 @@ public class SecurityConfig {
                 // Role-restricted endpoints
                 .requestMatchers("/api/v1/mandis/*/queue/next", "/api/v1/mandis/*/queue/*/call").hasAnyRole("ADMIN", "MANDI_OPERATOR", "MANDI_MANAGER")
                 .requestMatchers("/api/v1/reports/**").hasAnyRole("ADMIN", "MANDI_MANAGER", "DISTRICT_OFFICER")
+                .requestMatchers("/api/v1/sms/**").hasAnyRole("ADMIN", "MANDI_OPERATOR", "MANDI_MANAGER", "DISTRICT_OFFICER")
                 // All other API endpoints require authenticated user
                 .requestMatchers("/api/v1/**").authenticated()
                 .anyRequest().permitAll()
