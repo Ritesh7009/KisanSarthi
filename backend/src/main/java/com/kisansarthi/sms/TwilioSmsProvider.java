@@ -18,7 +18,7 @@ public class TwilioSmsProvider implements SmsProvider {
     public TwilioSmsProvider(
             @Value("${TWILIO_ACCOUNT_SID:}") String accountSid,
             @Value("${TWILIO_AUTH_TOKEN:}") String authToken,
-            @Value("${TWILIO_FROM_NUMBER:}") String fromNumber) {
+            @Value("${TWILIO_FROM_NUMBER:${TWILIO_PHONE_NUMBER:}}") String fromNumber) {
         this.accountSid = accountSid;
         this.authToken = authToken;
         this.fromNumber = fromNumber;
