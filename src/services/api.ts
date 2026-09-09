@@ -77,9 +77,8 @@ export interface CreateBookingPayload {
   waitTimeEstimateMins?: number;
 }
 
-// API base URL: empty by default preserves same-origin/local development.
-// Production deployments can set VITE_API_BASE_URL to the deployed backend origin.
-const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+// API base URL: uses VITE_API_BASE_URL when provided, defaulting to https://kisansarthi-vsne.onrender.com.
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || 'https://kisansarthi-vsne.onrender.com').replace(/\/$/, '');
 
 export const apiUrl = (endpoint: string): string => {
   if (/^https?:\/\//i.test(endpoint)) return endpoint;
@@ -454,7 +453,21 @@ export const aiApi = {
     });
   },
 
+  async slotRecommendation(payload: any): Promise<AISlotSuggestion> {
+    return request<AISlotSuggestion>('/api/v1/ai/slot-suggestion', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
   async getYieldAnalysis(payload: any): Promise<AIYieldAnalysis> {
+    return request<AIYieldAnalysis>('/api/v1/ai/yield-analysis', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  async yieldAdvisor(payload: any): Promise<AIYieldAnalysis> {
     return request<AIYieldAnalysis>('/api/v1/ai/yield-analysis', {
       method: 'POST',
       body: JSON.stringify(payload),
