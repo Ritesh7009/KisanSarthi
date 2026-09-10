@@ -1748,10 +1748,26 @@ Respond strictly in JSON format matching this schema:
     });
   }
 
-  // Listen on port 3000
+  // Listen on port 3000 (Mandatory for sandbox reverse proxy)
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`KisanSarthi Unified Server running on http://0.0.0.0:${PORT} with WebSocket on /ws`);
   });
+
+  // Support Google Cloud Run dynamic port assignment in production deployments
+  const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
+  if (process.env.NODE_ENV === 'production' && envPort && envPort !== PORT) {
+    try {
+      const prodIngress = http.createServer(app);
+      prodIngress.on('error', (err: { message?: string }) => {
+        console.warn(`Cloud Run dynamic port ${envPort} listener notice:`, err?.message || err);
+      });
+      prodIngress.listen(envPort, '0.0.0.0', () => {
+        console.log(`Google Cloud Run production listener active on http://0.0.0.0:${envPort}`);
+      });
+    } catch (err: unknown) {
+      console.warn('Production listener notice:', err);
+    }
+  }
 }
 
 startServer();

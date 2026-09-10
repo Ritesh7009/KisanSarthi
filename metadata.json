@@ -1,6 +1,6 @@
 {
   "name": "KisanSarthi MP - Smart Mandi Procurement & Queue Management",
   "description": "Real-time procurement scheduling, AI slot booking, live APMC mandi queue management, and DBT payment tracking for Madhya Pradesh farmers.",
-  "requestFramePermissions": ["notifications", "geolocation"],
+  "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
