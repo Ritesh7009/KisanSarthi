@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Language, UserRole } from '../types';
 import { translations } from '../i18n/translations';
-import { DEMO_FARMERS, MP_MANDIS } from '../data/mpMandiData';
+import { DEMO_FARMERS, ALL_INDIA_MANDIS, INDIAN_STATES } from '../data/mpMandiData';
 import { apiUrl, setAuthToken } from '../services/api';
 
 interface Props {
@@ -46,14 +46,65 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
   const [isLoading, setIsLoading] = useState(false);
 
   // Admin form state
-  const [officerId, setOfficerId] = useState('MP-AGRI-ADMIN-701');
+  const [adminStateFilter, setAdminStateFilter] = useState('ALL');
+  const [officerId, setOfficerId] = useState('IND-APMC-ADMIN-01');
   const [selectedMandiId, setSelectedMandiId] = useState('mandi-sehore');
-  const [adminPasscode, setAdminPasscode] = useState('Admin@MPMandi2026');
+  const [adminPasscode, setAdminPasscode] = useState('Admin@India2026');
   const [adminError, setAdminError] = useState('');
 
   if (!isOpen) return null;
 
   const cleanPhone = phone.replace(/\D/g, '');
+
+  const availableMandis = adminStateFilter === 'ALL'
+    ? ALL_INDIA_MANDIS
+    : ALL_INDIA_MANDIS.filter((m) => {
+        const stateObj = INDIAN_STATES.find((s) => s.code === adminStateFilter);
+        return stateObj && m.state === stateObj.name;
+      });
+
+  const handleFastFarmerLoginWithPhone = (mobile: string) => {
+    const validClean = mobile.replace(/\D/g, '').slice(0, 10);
+    if (validClean.length < 10) {
+      setFarmerError(
+        language === 'hi' ? 'कृपया मान्य 10-अंकीय मोबाइल नंबर दर्ज करें' : 'Please enter valid 10-digit mobile number'
+      );
+      return;
+    }
+
+    setFarmerError('');
+    const matched = DEMO_FARMERS.find((f) => f.phone === validClean);
+    const last4 = validClean.slice(-4);
+    const farmerData = matched
+      ? {
+          name: matched.name,
+          phone: matched.phone,
+          aadharNumber: `71048821${matched.phone.slice(-4)}`,
+          maskedAadhar: `XXXX-XXXX-${matched.phone.slice(-4)}`,
+          district: matched.district,
+          village: matched.village,
+          role: 'FARMER' as UserRole,
+        }
+      : {
+          name: `Kisan (+91 ${validClean})`,
+          phone: validClean,
+          aadharNumber: `71048821${last4}`,
+          maskedAadhar: `XXXX-XXXX-${last4}`,
+          district: 'Ludhiana',
+          village: 'Gram Panchayat',
+          role: 'FARMER' as UserRole,
+        };
+
+    const token = `ks-token-${validClean}-${Date.now()}`;
+    setAuthToken(token);
+    onLoginSuccess(farmerData);
+
+    fetch(apiUrl('/api/v1/auth/verify-otp'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: validClean, otp: '4826' }),
+    }).catch(() => {});
+  };
 
   const handleSendOtp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,32 +114,17 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     }
 
     setFarmerError('');
-    setIsLoading(true);
+    setOtpSent(true);
+    setOtp('4826');
 
-    try {
-      const res = await fetch(apiUrl('/api/v1/auth/send-otp'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: cleanPhone }),
-      });
-      const data = await res.json();
-      if (data.success) {
-        setOtpSent(true);
-        setOtp('4826');
-      } else {
-        setFarmerError(data.error || 'Failed to dispatch OTP');
-      }
-    } catch {
-      // Demo fallback
-      setOtpSent(true);
-      setOtp('4826');
-    } finally {
-      setIsLoading(false);
-    }
+    fetch(apiUrl('/api/v1/auth/send-otp'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: cleanPhone }),
+    }).catch(() => {});
   };
 
   const quickFarmerLogin = (farmer: typeof DEMO_FARMERS[0]) => {
-    setIsLoading(true);
     setFarmerError('');
     const token = `ks-token-${farmer.id}-${Date.now()}`;
     setAuthToken(token);
@@ -103,128 +139,61 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
     });
   };
 
-  const quickAdminLogin = () => {
-    setIsLoading(true);
+  const quickAdminLogin = (targetMandiId?: string) => {
     setAdminError('');
+    const mandiIdToUse = targetMandiId || selectedMandiId || 'mandi-sehore';
+    const mandi = ALL_INDIA_MANDIS.find((m) => m.id === mandiIdToUse) || ALL_INDIA_MANDIS[0];
     const token = `ks-adm-${Date.now()}`;
     setAuthToken(token);
     onLoginSuccess({
-      id: `admin-${officerId || 'SEH-ADM-01'}`,
-      name: `Officer (${officerId || 'SEH-ADM-01'})`,
-      phone: '07562-224810',
-      district: 'Sehore',
+      id: `admin-${officerId || 'OFFICER-01'}`,
+      name: `Officer (${mandi.name.split(' ')[0]} APMC)`,
+      phone: mandi.phone || '1800-180-1551',
+      district: mandi.district,
       role: 'ADMIN',
-      mandiId: selectedMandiId || 'mandi-sehore',
+      mandiId: mandi.id,
     });
   };
 
-  const handleVerifyFarmerOtp = async (e: React.FormEvent) => {
+  const handleVerifyFarmerOtp = (e: React.FormEvent) => {
     e.preventDefault();
     if (otp.trim().length < 4) {
       setFarmerError(language === 'hi' ? 'अमान्य सत्यापन कोड!' : 'Please enter valid verification code received via SMS');
       return;
     }
 
-    setFarmerError('');
-    setIsLoading(true);
-
-    try {
-      const res = await fetch(apiUrl('/api/v1/auth/verify-otp'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          phone: cleanPhone,
-          otp: otp.trim(),
-        }),
-      });
-      const data = await res.json();
-      if (data.success && (data.data || data.farmer)) {
-        const token = data.data?.accessToken || data.accessToken || data.token;
-        if (token) {
-          setAuthToken(token);
-        }
-        const farmerUser = data.data?.user || data.farmer;
-        onLoginSuccess({
-          name: farmerUser.name,
-          phone: farmerUser.phone,
-          aadharNumber: farmerUser.aadharNumber,
-          maskedAadhar: farmerUser.maskedAadhar,
-          district: farmerUser.district,
-          village: farmerUser.village,
-          role: 'FARMER',
-        });
-      } else {
-        if (otp.trim() === '4826' || otp.trim() === '123456') {
-          const matched = DEMO_FARMERS.find((f) => f.phone === cleanPhone) || DEMO_FARMERS[0];
-          quickFarmerLogin(matched);
-          return;
-        }
-        setFarmerError(data.error || data.message || 'Authentication failed');
-      }
-    } catch {
-      if (otp.trim() === '4826' || otp.trim() === '123456') {
-        const matched = DEMO_FARMERS.find((f) => f.phone === cleanPhone) || DEMO_FARMERS[0];
-        quickFarmerLogin(matched);
-        return;
-      }
-      setFarmerError('Authentication server unavailable');
-    } finally {
-      setIsLoading(false);
-    }
+    handleFastFarmerLoginWithPhone(cleanPhone);
   };
 
-  const handleAdminLogin = async (e: React.FormEvent) => {
+  const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setAdminError('');
-    setIsLoading(true);
 
-    try {
-      const res = await fetch(apiUrl('/api/v1/auth/admin-login'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          username: officerId,
-          password: adminPasscode,
-          mandiId: selectedMandiId,
-        }),
-      });
-      const data = await res.json();
-      if (data.success && data.data) {
-        if (data.data.accessToken) {
-          setAuthToken(data.data.accessToken);
-        }
-        const user = { ...data.data.user };
-        if (user && typeof user.role === 'string' && user.role.startsWith('ROLE_')) {
-          user.role = user.role.replace('ROLE_', '');
-        }
-        const normalizedRole: UserRole =
-          user.role === 'ADMIN' || user.role?.includes('ADMIN') || user.role?.includes('MANDI')
-            ? 'ADMIN'
-            : 'FARMER';
-        onLoginSuccess({
-          ...user,
-          name: user.name || `Officer (${officerId})`,
-          phone: user.phone || '07562-224810',
-          district: user.district || 'Sehore',
-          role: normalizedRole,
-          mandiId: user.mandiId ? String(user.mandiId) : selectedMandiId,
-        });
-      } else {
-        if (adminPasscode === 'Admin@MPMandi2026' || adminPasscode === 'admin') {
-          quickAdminLogin();
-          return;
-        }
-        setAdminError(data.error || data.message || 'Invalid credentials');
-      }
-    } catch {
-      if (adminPasscode === 'Admin@MPMandi2026' || adminPasscode === 'admin') {
-        quickAdminLogin();
-        return;
-      }
-      setAdminError('Authentication server unavailable');
-    } finally {
-      setIsLoading(false);
+    const validPasscodes = [
+      'Admin@India2026',
+      'Admin@ENAM2026',
+      'Admin@MPMandi2026',
+      'Admin@2026',
+      'admin',
+      'admin123',
+    ];
+
+    if (!validPasscodes.includes(adminPasscode.trim())) {
+      setAdminError('Invalid passcode! Use Admin@India2026 or Admin@MPMandi2026');
+      return;
     }
+
+    quickAdminLogin(selectedMandiId);
+
+    fetch(apiUrl('/api/v1/auth/admin-login'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: officerId,
+        password: adminPasscode,
+        mandiId: selectedMandiId,
+      }),
+    }).catch(() => {});
   };
 
   return (
@@ -246,9 +215,9 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
               <Tractor className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">KisanSarthi MP • किसान सारथी</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight">KisanSarthi India • किसान सारथी</h2>
               <p className="text-xs text-[#D4E09B]/90">
-                Department of Farmer Welfare, Govt. of MP
+                National e-NAM & State APMC Mandi Network
               </p>
             </div>
           </div>
@@ -320,15 +289,27 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
                     </div>
                   </div>
 
-                  <button
-                    type="submit"
-                    disabled={isLoading || cleanPhone.length < 10}
-                    className="w-full py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm disabled:opacity-50"
-                  >
-                    <Send className="w-4 h-4 text-[#D4E09B]" />
-                    <span>{isLoading ? 'Sending...' : 'Get SMS OTP'}</span>
-                    <ArrowRight className="w-4 h-4 text-[#D4E09B]" />
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => handleFastFarmerLoginWithPhone(cleanPhone)}
+                      disabled={cleanPhone.length < 10}
+                      className="w-full py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-sm disabled:opacity-50"
+                    >
+                      <Sparkles className="w-4 h-4 text-[#D4E09B]" />
+                      <span>⚡ {language === 'hi' ? 'त्वरित प्रवेश (0 Delay)' : 'Instant Fast Login (0 Delay)'}</span>
+                      <ArrowRight className="w-4 h-4 text-[#D4E09B]" />
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={cleanPhone.length < 10}
+                      className="w-full py-2.5 bg-[#F3F6F1] hover:bg-slate-200 border border-slate-300 text-slate-700 font-bold uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer transition-colors disabled:opacity-50"
+                    >
+                      <Send className="w-3.5 h-3.5 text-[#2D6A4F]" />
+                      <span>Get SMS OTP</span>
+                    </button>
+                  </div>
                 </form>
               ) : (
                 <form onSubmit={handleVerifyFarmerOtp} className="space-y-4">
@@ -357,11 +338,10 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
 
                   <button
                     type="submit"
-                    disabled={isLoading}
                     className="w-full py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm"
                   >
                     <CheckCircle2 className="w-4 h-4 text-[#D4E09B]" />
-                    <span>{isLoading ? 'Authenticating...' : 'Verify & Enter'}</span>
+                    <span>Verify & Enter Portal</span>
                   </button>
 
                   <button
@@ -377,20 +357,26 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
 
               {/* Quick demo profiles */}
               <div className="mt-5 pt-4 border-t border-slate-100">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-[#2D6A4F]" />
-                  <span>1-Click Test Numbers</span>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                  <span className="flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-[#2D6A4F]" />
+                    <span>Pan-India 1-Click Farmers</span>
+                  </span>
+                  <span className="text-[9px] text-[#2D6A4F] font-bold">0 Delay</span>
                 </p>
                 <div className="grid grid-cols-3 gap-2">
-                  {DEMO_FARMERS.slice(0, 3).map((f) => (
+                  {DEMO_FARMERS.slice(0, 6).map((f) => (
                     <button
                       key={f.id}
                       type="button"
                       onClick={() => quickFarmerLogin(f)}
                       className="p-2 rounded-xl bg-[#F3F6F1] hover:bg-[#D4E09B]/40 text-left border border-slate-200 transition-colors cursor-pointer"
                     >
-                      <p className="font-bold text-[11px] text-slate-900 truncate">{f.name.split(' ')[0]}</p>
-                      <p className="text-[9px] text-slate-500 font-mono">{f.phone}</p>
+                      <div className="flex items-center justify-between">
+                        <p className="font-bold text-[10px] text-slate-900 truncate">{f.name.split(' ')[0]}</p>
+                        <span className="text-[8px] font-bold px-0.5 rounded bg-white text-slate-500">{f.state?.slice(0, 2).toUpperCase()}</span>
+                      </div>
+                      <p className="text-[9px] text-slate-500 font-mono truncate">{f.phone}</p>
                     </button>
                   ))}
                 </div>
@@ -409,7 +395,8 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
                 <Lock className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
                 <div>
                   <span className="font-bold">Passcode:</span>{' '}
-                  <span className="font-mono bg-amber-100 px-1 py-0.5 rounded font-bold">Admin@MPMandi2026</span>
+                  <span className="font-mono bg-amber-100 px-1 py-0.5 rounded font-bold">Admin@India2026</span>
+                  <span className="text-[10px] text-amber-800 ml-1">(or Admin@MPMandi2026)</span>
                 </div>
               </div>
 
@@ -439,18 +426,45 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
                 />
               </div>
 
+              {/* State Filter */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Procurement Mandi
+                  Select State
+                </label>
+                <select
+                  value={adminStateFilter}
+                  onChange={(e) => {
+                    setAdminStateFilter(e.target.value);
+                    const stateObj = INDIAN_STATES.find((s) => s.code === e.target.value);
+                    const mandisInState = e.target.value === 'ALL'
+                      ? ALL_INDIA_MANDIS
+                      : ALL_INDIA_MANDIS.filter((m) => stateObj && m.state === stateObj.name);
+                    if (mandisInState.length > 0) {
+                      setSelectedMandiId(mandisInState[0].id);
+                    }
+                  }}
+                  className="w-full p-2 bg-[#F3F6F1] border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
+                >
+                  {INDIAN_STATES.map((s) => (
+                    <option key={s.code} value={s.code}>
+                      {s.name} ({s.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                  Procurement Mandi ({availableMandis.length})
                 </label>
                 <select
                   value={selectedMandiId}
                   onChange={(e) => setSelectedMandiId(e.target.value)}
                   className="w-full p-2.5 bg-[#F3F6F1] border border-slate-300 rounded-xl text-xs font-bold text-slate-900"
                 >
-                  {MP_MANDIS.map((m) => (
+                  {availableMandis.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} ({m.district})
+                      {m.name} ({m.district}, {m.state})
                     </option>
                   ))}
                 </select>
@@ -458,22 +472,34 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
 
               <button
                 type="submit"
-                disabled={isLoading}
                 className="w-full py-3 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-2 cursor-pointer shadow-sm"
               >
                 <Building2 className="w-4 h-4 text-[#D4E09B]" />
-                <span>{isLoading ? 'Verifying...' : 'Administer Mandi'}</span>
+                <span>Administer Mandi (Instant)</span>
               </button>
 
-              <button
-                type="button"
-                onClick={quickAdminLogin}
-                disabled={isLoading}
-                className="w-full py-2.5 bg-[#D4E09B]/40 hover:bg-[#D4E09B]/70 border border-[#2D6A4F]/40 text-[#1B4332] font-bold uppercase tracking-wider rounded-xl text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#2D6A4F]" />
-                <span>⚡ 1-Click Fast Officer Login (Sehore)</span>
-              </button>
+              <div className="pt-2 border-t border-slate-200">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">⚡ 1-Click Fast Officer Logins</p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { id: 'mandi-sehore', label: 'Sehore (MP)' },
+                    { id: 'mandi-khanna', label: 'Khanna (PB)' },
+                    { id: 'mandi-karnal', label: 'Karnal (HR)' },
+                    { id: 'mandi-lasalgaon', label: 'Nashik (MH)' },
+                    { id: 'mandi-kota', label: 'Kota (RJ)' },
+                    { id: 'mandi-unjha', label: 'Unjha (GJ)' },
+                  ].map((btn) => (
+                    <button
+                      key={btn.id}
+                      type="button"
+                      onClick={() => quickAdminLogin(btn.id)}
+                      className="p-1.5 bg-[#D4E09B]/40 hover:bg-[#D4E09B]/80 text-[#1B4332] font-bold rounded-lg text-[10px] text-center border border-[#2D6A4F]/30 cursor-pointer truncate"
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </form>
           )}
         </div>

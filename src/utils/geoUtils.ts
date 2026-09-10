@@ -88,46 +88,82 @@ export function findNearestMandi(
 }
 
 /**
- * Common MP Agricultural District coordinates for easy 1-click preset / fallback
+ * Common Agricultural District coordinates across India for easy 1-click preset / fallback
  */
-export const MP_LOCATION_PRESETS = [
+export const ALL_INDIA_LOCATION_PRESETS = [
   {
-    name: 'Sehore Tehsil (Bilkisganj)',
+    name: 'Khanna / Ludhiana (Punjab Grain Belt)',
+    lat: 30.7072,
+    lng: 76.2167,
+    district: 'Ludhiana',
+    state: 'Punjab',
+  },
+  {
+    name: 'Karnal (Haryana Basmati Hub)',
+    lat: 29.6857,
+    lng: 76.9905,
+    district: 'Karnal',
+    state: 'Haryana',
+  },
+  {
+    name: 'Lasalgaon / Nashik (Maharashtra)',
+    lat: 20.1472,
+    lng: 74.2272,
+    district: 'Nashik',
+    state: 'Maharashtra',
+  },
+  {
+    name: 'Kota Bhamashah (Rajasthan)',
+    lat: 25.1325,
+    lng: 75.8456,
+    district: 'Kota',
+    state: 'Rajasthan',
+  },
+  {
+    name: 'Unjha / Mehsana (Gujarat)',
+    lat: 23.8039,
+    lng: 72.3938,
+    district: 'Mehsana',
+    state: 'Gujarat',
+  },
+  {
+    name: 'Sehore Tehsil (Madhya Pradesh)',
     lat: 23.1842,
     lng: 77.0621,
     district: 'Sehore',
+    state: 'Madhya Pradesh',
   },
   {
-    name: 'Harda (Timarni Block)',
+    name: 'Harda (Timarni Block, MP)',
     lat: 22.3789,
     lng: 77.1422,
     district: 'Harda',
+    state: 'Madhya Pradesh',
   },
   {
-    name: 'Ujjain (Chimanganj Rural)',
-    lat: 23.1895,
-    lng: 75.7821,
-    district: 'Ujjain',
+    name: 'Muzaffarnagar (Uttar Pradesh)',
+    lat: 29.4727,
+    lng: 77.7085,
+    district: 'Muzaffarnagar',
+    state: 'Uttar Pradesh',
   },
   {
-    name: 'Bhopal Rural (Berasia)',
-    lat: 23.6334,
-    lng: 77.4325,
-    district: 'Bhopal',
+    name: 'Gulabbagh / Purnea (Bihar Maize Hub)',
+    lat: 25.7711,
+    lng: 87.5255,
+    district: 'Purnea',
+    state: 'Bihar',
   },
   {
-    name: 'Indore (Sanwer Tehsil)',
-    lat: 22.9734,
-    lng: 75.8271,
-    district: 'Indore',
-  },
-  {
-    name: 'Vidisha (Basoda Road)',
-    lat: 23.5281,
-    lng: 77.8124,
-    district: 'Vidisha',
+    name: 'Guntur (Andhra Pradesh)',
+    lat: 16.3067,
+    lng: 80.4365,
+    district: 'Guntur',
+    state: 'Andhra Pradesh & Telangana',
   },
 ];
+
+export const MP_LOCATION_PRESETS = ALL_INDIA_LOCATION_PRESETS;
 
 /**
  * Request real device coordinates via browser Geolocation API

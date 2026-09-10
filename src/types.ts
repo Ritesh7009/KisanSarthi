@@ -6,10 +6,12 @@ export interface CropInfo {
   id: string;
   name: string;
   hindiName: string;
-  malwiName: string;
+  malwiName?: string;
+  regionalName?: string;
   season: 'Rabi' | 'Kharif' | 'Zaid';
   standardMspPerQuintal: number;
-  mpBonusPerQuintal: number;
+  mpBonusPerQuintal?: number;
+  stateBonusPerQuintal?: number;
   totalMsp: number;
   marketPricePerQuintal: number;
   typicalCostPerAcre: number;
@@ -17,12 +19,15 @@ export interface CropInfo {
   moistureLimitPct: number;
   gradeSpecs: string;
   icon: string;
+  majorStates?: string[];
 }
 
 export interface MandiCenter {
   id: string;
   name: string;
   hindiName: string;
+  state: string;
+  hindiState?: string;
   district: string;
   hindiDistrict: string;
   address: string;
@@ -45,6 +50,8 @@ export interface MandiCenter {
   commoditiesHandled: string[];
   lat: number;
   lng: number;
+  eNamCode?: string;
+  isENamMandi?: boolean;
 }
 
 export type BookingStatus =
@@ -74,6 +81,7 @@ export interface SlotBooking {
   farmerName: string;
   farmerPhone: string;
   farmerAadhar?: string;
+  state?: string;
   district: string;
   village: string;
   mandiCenterId: string;
@@ -170,6 +178,8 @@ export interface WeatherAlert {
 }
 
 export interface DistrictProcurementStat {
+  state: string;
+  hindiState?: string;
   district: string;
   hindiDistrict: string;
   totalProcuredQuintals: number;
@@ -210,6 +220,7 @@ export interface FarmerProfile {
   phone: string;
   aadharNumber: string; // 12-digit UID
   maskedAadhar: string; // e.g. "XXXX-XXXX-4589"
+  state?: string;
   district: string;
   village: string;
   landSizeAcres: number;

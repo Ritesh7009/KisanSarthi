@@ -7,6 +7,8 @@ import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
 import dotenv from 'dotenv';
 import {
+  ALL_INDIA_CROPS,
+  ALL_INDIA_MANDIS,
   MP_CROPS,
   MP_MANDIS,
   DISTRICT_PROCUREMENT_STATS,
@@ -66,8 +68,8 @@ const farmers: FarmerProfile[] = DEMO_FARMERS.map((f, idx) => ({
   loginCount: 5 + idx * 3,
 }));
 
-const mandis: MandiCenter[] = JSON.parse(JSON.stringify(MP_MANDIS));
-const crops: CropInfo[] = JSON.parse(JSON.stringify(MP_CROPS));
+const mandis: MandiCenter[] = JSON.parse(JSON.stringify(ALL_INDIA_MANDIS));
+const crops: CropInfo[] = JSON.parse(JSON.stringify(ALL_INDIA_CROPS));
 const bookings: SlotBooking[] = JSON.parse(JSON.stringify(INITIAL_BOOKINGS));
 const slotConfigs: TimeSlotConfig[] = JSON.parse(JSON.stringify(STANDARD_TIME_SLOTS));
 const smsLogs: SmsLogItem[] = [];
@@ -601,30 +603,39 @@ async function startServer() {
   app.post('/api/v1/auth/verify-otp', handleVerifyOtp);
   app.post('/api/auth/verify-otp', handleVerifyOtp);
 
-  // Fast department admin authentication
+  // Fast department admin authentication (Instant sub-10ms response)
   const handleAdminLogin = (req: express.Request, res: express.Response) => {
     const { username, password, mandiId } = req.body;
     const cleanUsername = String(username || '').trim();
     const cleanPassword = String(password || '').trim();
 
     // Verify authorized passcode
-    const validPasscodes = ['Admin@MPMandi2026', 'admin', 'Admin@2026', 'admin123'];
-    if (!validPasscodes.includes(cleanPassword) && cleanPassword !== 'Admin@MPMandi2026') {
+    const validPasscodes = [
+      'Admin@India2026',
+      'Admin@ENAM2026',
+      'Admin@MPMandi2026',
+      'Admin@2026',
+      'admin',
+      'admin123',
+    ];
+    if (!validPasscodes.includes(cleanPassword)) {
       return res.status(401).json({
         success: false,
-        error: 'Invalid passcode! Authorized passcode: Admin@MPMandi2026',
+        error: 'Invalid passcode! Authorized passcode: Admin@India2026 or Admin@MPMandi2026',
       });
     }
 
     const officerMandiId = mandiId || 'mandi-sehore';
+    const targetMandi = mandis.find((m) => m.id === officerMandiId) || mandis[0];
     const accessToken = `ks-adm-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const adminUser = {
       id: `admin-${cleanUsername || 'officer'}`,
-      name: `Officer (${cleanUsername || 'SEH-ADM-01'})`,
-      phone: '07562-224810',
-      district: 'Sehore',
+      name: `Officer (${cleanUsername || targetMandi.district + ' Mandi'})`,
+      phone: targetMandi.phone || '1800-180-1551',
+      state: targetMandi.state,
+      district: targetMandi.district,
       role: 'ADMIN' as const,
-      mandiId: officerMandiId,
+      mandiId: targetMandi.id,
     };
 
     recordAuditLog(
@@ -632,7 +643,7 @@ async function startServer() {
       'SYSTEM',
       adminUser.id,
       adminUser.name,
-      `Officer login authorized for mandi: ${officerMandiId}`,
+      `Officer login authorized for mandi: ${targetMandi.name} (${targetMandi.state})`,
       '',
       'ACTIVE',
       0
