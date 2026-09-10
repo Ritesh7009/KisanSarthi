@@ -132,7 +132,7 @@ export const MP_CROPS: CropInfo[] = [
 ];
 
 // Authentic MP Mandis pulled from MP Mandi Board (MP State Agricultural Marketing Board / data.gov.in)
-export const MP_MANDIS: MandiCenter[] = [
+const RAW_MANDIS = [
   {
     id: 'mandi-sehore',
     name: 'Krishi Upaj Mandi Samiti, Sehore',
@@ -377,6 +377,23 @@ export const MP_MANDIS: MandiCenter[] = [
   }
 ];
 
+export const MP_MANDIS: MandiCenter[] = RAW_MANDIS.map((m) => {
+  const totalKg = m.dailyCapacityQuintals * 100;
+  const reservedKg = (m.activeTokensWaiting || 10) * 4500;
+  const procuredKg = (m.currentTokenServing || 30) * 4800;
+  const occupiedKg = reservedKg + procuredKg;
+  const availableKg = Math.max(0, totalKg - occupiedKg);
+  return {
+    ...m,
+    gateStatus: m.gateStatus as MandiCenter['gateStatus'],
+    totalCapacityKg: totalKg,
+    reservedCapacityKg: reservedKg,
+    procuredCapacityKg: procuredKg,
+    occupiedCapacityKg: occupiedKg,
+    availableCapacityKg: availableKg,
+  };
+});
+
 // District-wise official MP procurement and storage warehouse figures
 export const DISTRICT_PROCUREMENT_STATS: DistrictProcurementStat[] = [
   {
@@ -489,13 +506,13 @@ export const DISTRICT_PROCUREMENT_STATS: DistrictProcurementStat[] = [
   }
 ];
 
-export const STANDARD_TIME_SLOTS: TimeSlotConfig[] = [
+const RAW_TIME_SLOTS = [
   {
     timeSlot: '08:00 AM - 10:00 AM',
     maxCapacityQuintals: 1400,
     maxVehicles: 25,
     bookedVehicles: 18,
-    status: 'OPEN',
+    status: 'OPEN' as const,
     estimatedWaitMins: 15,
   },
   {
@@ -503,7 +520,7 @@ export const STANDARD_TIME_SLOTS: TimeSlotConfig[] = [
     maxCapacityQuintals: 1600,
     maxVehicles: 30,
     bookedVehicles: 28,
-    status: 'LIMITED',
+    status: 'LIMITED' as const,
     estimatedWaitMins: 35,
   },
   {
@@ -511,7 +528,7 @@ export const STANDARD_TIME_SLOTS: TimeSlotConfig[] = [
     maxCapacityQuintals: 1600,
     maxVehicles: 30,
     bookedVehicles: 30,
-    status: 'FULL',
+    status: 'FULL' as const,
     estimatedWaitMins: 65,
   },
   {
@@ -519,7 +536,7 @@ export const STANDARD_TIME_SLOTS: TimeSlotConfig[] = [
     maxCapacityQuintals: 1500,
     maxVehicles: 28,
     bookedVehicles: 14,
-    status: 'OPEN',
+    status: 'OPEN' as const,
     estimatedWaitMins: 20,
   },
   {
@@ -527,10 +544,24 @@ export const STANDARD_TIME_SLOTS: TimeSlotConfig[] = [
     maxCapacityQuintals: 1200,
     maxVehicles: 22,
     bookedVehicles: 9,
-    status: 'OPEN',
+    status: 'OPEN' as const,
     estimatedWaitMins: 15,
   }
 ];
+
+export const STANDARD_TIME_SLOTS: TimeSlotConfig[] = RAW_TIME_SLOTS.map((s) => {
+  const maxKg = s.maxCapacityQuintals * 100;
+  const bookedKg = s.bookedVehicles * 4500;
+  const availKg = Math.max(0, maxKg - bookedKg);
+  const availVehicles = Math.max(0, s.maxVehicles - s.bookedVehicles);
+  return {
+    ...s,
+    maxCapacityKg: maxKg,
+    bookedQuantityKg: bookedKg,
+    availableQuantityKg: availKg,
+    availableVehicles: availVehicles,
+  };
+});
 
 // Weather alerts for harvest coordination
 export const DEMO_WEATHER_ALERTS: WeatherAlert[] = [

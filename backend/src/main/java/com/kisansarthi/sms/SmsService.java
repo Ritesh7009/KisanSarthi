@@ -66,11 +66,69 @@ public class SmsService {
         return dispatchSms(phone, farmerName, null, message, "GENERAL");
     }
 
+    public boolean isTrialMode() {
+        return smsProvider.isTrialMode();
+    }
+
+    public String getProviderName() {
+        return smsProvider.getProviderName();
+    }
+
+    public SmsResult sendTrialTestSms(String phone, String farmerName, String customTrialMessage) {
+        String msgContent = (customTrialMessage != null && !customTrialMessage.isBlank())
+                ? customTrialMessage
+                : "Your 1234 order of 1 items has shipped and should be delivered on tomorrow. Details: https://twilio.com";
+
+        SmsLog logEntry = new SmsLog(phone, farmerName != null ? farmerName : "Test Recipient", null, msgContent, "SENDING");
+        logEntry.setSenderHeader("TWILIO-TRIAL");
+        logEntry.setDltTemplateId("TWILIO-PREDEFINED-ORDER-CONFIRMATION");
+        logEntry.setDispatchedBy("Twilio Trial Dispatcher (Connectivity Test)");
+        logEntry.setChannel("TWILIO_TRIAL_TEST");
+        logEntry = smsLogRepository.save(logEntry);
+
+        try {
+            SmsResult result = smsProvider.sendTrialTestSms(phone, customTrialMessage);
+            if (result.isSuccess()) {
+                logEntry.setStatus(result.getStatus());
+                logEntry.setDeliveryReceiptId(result.getSid());
+                logEntry.setDeliveryReport("Twilio Trial Connectivity/Demo Test. Provider SID: " + result.getSid());
+            } else {
+                logEntry.setStatus("FAILED");
+                logEntry.setDeliveryReport(String.format("Twilio Trial Error [code=%s]: %s",
+                        result.getErrorCode() != null ? result.getErrorCode() : "N/A",
+                        result.getErrorMessage()));
+            }
+            logEntry.setUpdatedAt(Instant.now());
+            smsLogRepository.save(logEntry);
+            return result;
+        } catch (Exception e) {
+            String safeMsg = e.getMessage() != null ? e.getMessage() : "Unknown exception during Twilio Trial Test";
+            log.error("Unexpected error sending trial test SMS to ****{}: {}",
+                    phone != null && phone.length() >= 4 ? phone.substring(phone.length() - 4) : phone,
+                    safeMsg);
+            logEntry.setStatus("FAILED");
+            logEntry.setDeliveryReport("Error: " + safeMsg);
+            logEntry.setUpdatedAt(Instant.now());
+            smsLogRepository.save(logEntry);
+            return SmsResult.failed(null, safeMsg);
+        }
+    }
+
     public List<SmsLog> getRecentLogs() {
         return smsLogRepository.findTop50ByOrderByCreatedAtDesc();
     }
 
     private SmsResult dispatchSms(String phone, String farmerName, String maskedAadhar, String message, String category) {
+        if (smsProvider.isTrialMode()) {
+            String trialErrMsg = "Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.";
+            log.warn("[SMS SERVICE] Blocked custom message dispatch in Trial mode to {}: {}", phone, trialErrMsg);
+            SmsLog logEntry = new SmsLog(phone, farmerName, maskedAadhar, message, "FAILED");
+            logEntry.setSenderHeader(defaultSenderHeader);
+            logEntry.setDeliveryReport("Restricted: " + trialErrMsg);
+            smsLogRepository.save(logEntry);
+            return SmsResult.failed(400, trialErrMsg);
+        }
+
         SmsLog logEntry = new SmsLog(phone, farmerName, maskedAadhar, message, "SENDING");
         logEntry.setSenderHeader(defaultSenderHeader);
         logEntry = smsLogRepository.save(logEntry);
@@ -79,6 +137,7 @@ public class SmsService {
             SmsResult result = smsProvider.sendSms(phone, message, defaultSenderHeader);
             if (result.isSuccess()) {
                 logEntry.setStatus(result.getStatus());
+                logEntry.setDeliveryReceiptId(result.getSid());
                 logEntry.setDeliveryReport("Dispatched via provider. Ref: " + result.getSid());
             } else {
                 logEntry.setStatus("FAILED");

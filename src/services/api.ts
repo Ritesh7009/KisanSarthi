@@ -16,6 +16,7 @@ import {
   DistrictProcurementStat,
   AISlotSuggestion,
   AIYieldAnalysis,
+  AuditLogItem,
 } from '../types';
 
 export interface ApiResponse<T> {
@@ -77,8 +78,8 @@ export interface CreateBookingPayload {
   waitTimeEstimateMins?: number;
 }
 
-// API base URL: uses VITE_API_BASE_URL when provided, defaulting to https://kisansarthi-vsne.onrender.com.
-const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || 'https://kisansarthi-vsne.onrender.com').replace(/\/$/, '');
+// API base URL: uses VITE_API_BASE_URL when provided, defaulting to relative path '' for same-origin server.
+const API_BASE_URL = ((import.meta as any).env?.VITE_API_BASE_URL || '').replace(/\/$/, '');
 
 export const apiUrl = (endpoint: string): string => {
   if (/^https?:\/\//i.test(endpoint)) return endpoint;
@@ -251,6 +252,14 @@ export const mandiApi = {
   async getMandiStatus(id: string): Promise<any> {
     return request(`/api/v1/mandis/${id}/status`);
   },
+
+  async updateCapacity(id: string, totalCapacityKg: number): Promise<MandiCenter> {
+    const res = await request<{ mandi: MandiCenter } | MandiCenter>(`/api/v1/mandis/${id}/capacity`, {
+      method: 'PUT',
+      body: JSON.stringify({ totalCapacityKg }),
+    });
+    return (res as any).mandi || res;
+  },
 };
 
 // ==========================================
@@ -354,6 +363,14 @@ export const bookingApi = {
     });
     return (res as any).booking || res;
   },
+
+  async rejectBooking(id: string, reason?: string): Promise<SlotBooking> {
+    const res = await request<{ booking: SlotBooking } | SlotBooking>(`/api/v1/bookings/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+    return (res as any).booking || res;
+  },
 };
 
 // ==========================================
@@ -366,6 +383,38 @@ export const queueApi = {
 
   async callNextToken(mandiId: string): Promise<QueueCallResult> {
     const res = await request<any>(`/api/v1/mandis/${mandiId}/queue/next`, {
+      method: 'POST',
+    });
+    return {
+      mandiId,
+      currentTokenServing: res.currentTokenServing ?? res.calledToken ?? 0,
+      calledToken: res.calledToken ?? res.currentTokenServing ?? 0,
+      activeTokensWaiting: res.activeTokensWaiting ?? res.waitingCount ?? 0,
+      waitingCount: res.waitingCount ?? res.activeTokensWaiting ?? 0,
+      calledBookingId: res.calledBookingId || res.matchedBooking?.id,
+      matchedBooking: res.matchedBooking || null,
+      timestamp: res.timestamp || new Date().toISOString(),
+    };
+  },
+
+  async skipToken(mandiId: string): Promise<QueueCallResult> {
+    const res = await request<any>(`/api/v1/mandis/${mandiId}/queue/skip`, {
+      method: 'POST',
+    });
+    return {
+      mandiId,
+      currentTokenServing: res.currentTokenServing ?? res.calledToken ?? 0,
+      calledToken: res.calledToken ?? res.currentTokenServing ?? 0,
+      activeTokensWaiting: res.activeTokensWaiting ?? res.waitingCount ?? 0,
+      waitingCount: res.waitingCount ?? res.activeTokensWaiting ?? 0,
+      calledBookingId: res.calledBookingId || res.matchedBooking?.id,
+      matchedBooking: res.matchedBooking || null,
+      timestamp: res.timestamp || new Date().toISOString(),
+    };
+  },
+
+  async recallToken(mandiId: string): Promise<QueueCallResult> {
+    const res = await request<any>(`/api/v1/mandis/${mandiId}/queue/recall`, {
       method: 'POST',
     });
     return {
@@ -495,5 +544,19 @@ export const reportApi = {
     const qs = district ? `?district=${encodeURIComponent(district)}` : '';
     const res = await request<{ stats: DistrictProcurementStat[] } | DistrictProcurementStat[]>(`/api/v1/reports/district-stats${qs}`);
     return Array.isArray(res) ? res : res.stats || [];
+  },
+};
+
+// ==========================================
+// 13. AUDIT LOGS API
+// ==========================================
+export const auditApi = {
+  async getLogs(params?: { entityType?: string; mandiId?: string }): Promise<AuditLogItem[]> {
+    const sp = new URLSearchParams();
+    if (params?.entityType) sp.append('entityType', params.entityType);
+    if (params?.mandiId) sp.append('mandiId', params.mandiId);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    const res = await request<{ logs: AuditLogItem[] } | AuditLogItem[]>(`/api/v1/audit/logs${qs}`);
+    return Array.isArray(res) ? res : (res as any).logs || [];
   },
 };

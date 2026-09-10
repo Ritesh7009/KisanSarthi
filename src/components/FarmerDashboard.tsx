@@ -252,7 +252,7 @@ export const FarmerDashboard: React.FC<Props> = ({
       vehicleType,
       vehicleNumber,
       aiRecommended: !!aiSlotSuggestion,
-      aiReasoning: aiSlotSuggestion?.reasons?.join(' ') || 'Scheduled via KisanSetu Smart Optimizer',
+      aiReasoning: aiSlotSuggestion?.reasons?.join(' ') || 'Scheduled via KisanSarthi Smart Optimizer',
       waitTimeEstimateMins: aiSlotSuggestion?.estimatedWaitTimeMinutes || 20,
     });
 
@@ -651,10 +651,10 @@ export const FarmerDashboard: React.FC<Props> = ({
                   <Sparkles className="w-4 h-4 text-[#D4E09B]" />
                   <span className="text-xs font-bold uppercase tracking-wider text-white/90">AI Slot Scheduling Benefit</span>
                 </div>
-                <span className="text-[10px] bg-white/15 text-[#D4E09B] font-mono px-2 py-0.5 rounded-full">KisanSetu AI</span>
+                <span className="text-[10px] bg-white/15 text-[#D4E09B] font-mono px-2 py-0.5 rounded-full">KisanSarthi AI</span>
               </div>
               <p className="text-[11px] text-white/90 leading-relaxed">
-                KisanSetu AI dynamically predicts weighbridge queue clearance rates based on live tractor arrival trends, reducing average turnaround from <strong>4.5 hours down to 25 minutes</strong>.
+                KisanSarthi AI dynamically predicts weighbridge queue clearance rates based on live tractor arrival trends, reducing average turnaround from <strong>4.5 hours down to 25 minutes</strong>.
               </p>
             </div>
           </div>

@@ -2,7 +2,7 @@ import { Language } from '../types';
 
 export const translations = {
   en: {
-    appTitle: 'KisanSetu MP',
+    appTitle: 'KisanSarthi MP',
     appSubtitle: 'Smart Mandi Procurement & Queue Management System',
     govtTag: 'Govt. of Madhya Pradesh • Farmer Welfare & APMC Board',
     tagline: 'Zero Wait Mandi Slots • Transparent MSP • Instant DBT',
@@ -105,7 +105,7 @@ export const translations = {
     saveChanges: 'Save Changes',
   },
   hi: {
-    appTitle: 'किसान सेतु म.प्र.',
+    appTitle: 'किसान सारथी म.प्र.',
     appSubtitle: 'स्मार्ट कृषि उपज मंडी उपार्जन एवं लाइव टोकन कतार प्रणाली',
     govtTag: 'मध्य प्रदेश शासन • किसान कल्याण एवं राज्य कृषि विपणन बोर्ड',
     tagline: 'शून्य प्रतीक्षा स्लॉट • पारदर्शी एमएसपी • त्वरित डीबीटी भुगतान',
@@ -208,7 +208,7 @@ export const translations = {
     saveChanges: 'परिवर्तन सहेजें',
   },
   mal: {
-    appTitle: 'किसान सेतु (मालवा-म.प्र.)',
+    appTitle: 'किसान सारथी (मालवा-म.प्र.)',
     appSubtitle: 'मंडी उपार्जन अर ऑनलाइन टोकन व्यवस्था',
     govtTag: 'मध्य प्रदेश सरकार • किसान कल्याण अर मंडी बोर्ड',
     tagline: 'नी कोई लंबी लाइन • पक्को समर्थन मूल्य • सीधो खातों म रुप्या',

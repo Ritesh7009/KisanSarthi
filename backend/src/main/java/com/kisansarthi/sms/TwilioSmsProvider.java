@@ -2,6 +2,7 @@ package com.kisansarthi.sms;
 
 import com.twilio.Twilio;
 import com.twilio.exception.ApiException;
+import com.twilio.rest.api.v2010.Account;
 import com.twilio.rest.api.v2010.account.Message;
 import com.twilio.type.PhoneNumber;
 import org.slf4j.Logger;
@@ -20,6 +21,14 @@ public class TwilioSmsProvider implements SmsProvider {
     private final String authToken;
     private final String fromNumber;
 
+    @Value("${kisansarthi.sms.twilio.trial-mode:${TWILIO_TRIAL_MODE:${TWILIO_TRIAL:}}}")
+    private String trialModeConfig;
+
+    @Value("${kisansarthi.sms.twilio.trial-message:${TWILIO_TRIAL_MESSAGE:Your 1234 order of 1 items has shipped and should be delivered on tomorrow. Details: https://twilio.com}}")
+    private String defaultTrialMessage;
+
+    private volatile Boolean cachedIsTrial = null;
+
     public TwilioSmsProvider(
             @Value("${TWILIO_ACCOUNT_SID:}") String accountSid,
             @Value("${TWILIO_AUTH_TOKEN:}") String authToken,
@@ -34,6 +43,41 @@ public class TwilioSmsProvider implements SmsProvider {
         }
 
         Twilio.init(accountSid, authToken);
+    }
+
+    @Override
+    public String getProviderName() {
+        return "twilio";
+    }
+
+    @Override
+    public boolean isTrialMode() {
+        if (cachedIsTrial != null) {
+            return cachedIsTrial;
+        }
+        synchronized (this) {
+            if (cachedIsTrial != null) {
+                return cachedIsTrial;
+            }
+            if (trialModeConfig != null && !trialModeConfig.isBlank()) {
+                cachedIsTrial = Boolean.parseBoolean(trialModeConfig.trim());
+                log.info("[Twilio] Trial mode explicitly configured via property: {}", cachedIsTrial);
+                return cachedIsTrial;
+            }
+            try {
+                Account account = Account.fetcher(accountSid).fetch();
+                if (account != null && account.getType() != null) {
+                    cachedIsTrial = account.getType().toString().equalsIgnoreCase("Trial");
+                    log.info("[Twilio] Auto-detected account type from Twilio API: {} (isTrial: {})", account.getType(), cachedIsTrial);
+                    return cachedIsTrial;
+                }
+            } catch (Exception e) {
+                log.warn("[Twilio] Could not fetch account info from API: {}. Defaulting to true for trial safety.", e.getMessage());
+            }
+            // Default to true for safety in trial environment
+            cachedIsTrial = true;
+            return cachedIsTrial;
+        }
     }
 
     /**
@@ -73,8 +117,16 @@ public class TwilioSmsProvider implements SmsProvider {
 
     @Override
     public SmsResult sendSms(String recipientPhone, String message, String senderHeader) {
+        if (isTrialMode()) {
+            log.warn("[Twilio] Blocked custom DLT message to recipient in Trial mode. Twilio Trial accounts cannot send custom DLT messages.");
+            return SmsResult.failed(
+                    400,
+                    "Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS."
+            );
+        }
+
         String e164Phone = toE164(recipientPhone);
-        log.info("Attempting Twilio SMS to {}", e164Phone);
+        log.info("Attempting production Twilio SMS to {}", e164Phone);
 
         try {
             Message sent = Message.creator(
@@ -84,18 +136,9 @@ public class TwilioSmsProvider implements SmsProvider {
             ).create();
 
             String rawStatus = sent.getStatus() != null ? sent.getStatus().toString().toUpperCase() : "ACCEPTED";
-            String resolvedStatus;
-            if ("QUEUED".equalsIgnoreCase(rawStatus)) {
-                resolvedStatus = "QUEUED";
-            } else if ("ACCEPTED".equalsIgnoreCase(rawStatus)) {
-                resolvedStatus = "ACCEPTED";
-            } else if ("FAILED".equalsIgnoreCase(rawStatus) || "UNDELIVERED".equalsIgnoreCase(rawStatus)) {
-                resolvedStatus = "FAILED";
-            } else {
-                resolvedStatus = rawStatus;
-            }
+            String resolvedStatus = resolveTwilioStatus(rawStatus);
 
-            log.info("Twilio accepted SMS. SID={}, status={}", sent.getSid(), resolvedStatus);
+            log.info("Twilio accepted production SMS. SID={}, status={}", sent.getSid(), resolvedStatus);
             return SmsResult.accepted(sent.getSid(), resolvedStatus);
 
         } catch (ApiException e) {
@@ -109,5 +152,55 @@ public class TwilioSmsProvider implements SmsProvider {
             log.error("Twilio SMS failed. errorCode=null, message={}", safeMessage);
             return SmsResult.failed(null, safeMessage);
         }
+    }
+
+    @Override
+    public SmsResult sendTrialTestSms(String recipientPhone, String customTrialMessage) {
+        String e164Phone = toE164(recipientPhone);
+        String messageToSend = (customTrialMessage != null && !customTrialMessage.isBlank())
+                ? customTrialMessage.trim()
+                : defaultTrialMessage;
+
+        log.info("Attempting Twilio Trial Test SMS to {} with pre-approved trial template", e164Phone);
+
+        try {
+            Message sent = Message.creator(
+                    new PhoneNumber(e164Phone),
+                    new PhoneNumber(fromNumber),
+                    messageToSend
+            ).create();
+
+            String rawStatus = sent.getStatus() != null ? sent.getStatus().toString().toUpperCase() : "ACCEPTED";
+            String resolvedStatus = resolveTwilioStatus(rawStatus);
+
+            log.info("Twilio accepted Trial Test SMS. SID={}, status={}", sent.getSid(), resolvedStatus);
+            return SmsResult.accepted(sent.getSid(), resolvedStatus);
+
+        } catch (ApiException e) {
+            Integer errorCode = e.getCode();
+            String safeMessage = sanitizeMessage(e.getMessage());
+            log.error("Twilio Trial Test SMS failed. errorCode={}, message={}", errorCode, safeMessage);
+            return SmsResult.failed(errorCode, safeMessage);
+
+        } catch (Exception e) {
+            String safeMessage = sanitizeMessage(e.getMessage());
+            log.error("Twilio Trial Test SMS failed. errorCode=null, message={}", safeMessage);
+            return SmsResult.failed(null, safeMessage);
+        }
+    }
+
+    private String resolveTwilioStatus(String rawStatus) {
+        if ("QUEUED".equalsIgnoreCase(rawStatus)) {
+            return "QUEUED";
+        } else if ("ACCEPTED".equalsIgnoreCase(rawStatus)) {
+            return "ACCEPTED";
+        } else if ("SENT".equalsIgnoreCase(rawStatus)) {
+            return "SENT";
+        } else if ("DELIVERED".equalsIgnoreCase(rawStatus)) {
+            return "DELIVERED";
+        } else if ("FAILED".equalsIgnoreCase(rawStatus) || "UNDELIVERED".equalsIgnoreCase(rawStatus)) {
+            return "FAILED";
+        }
+        return rawStatus;
     }
 }

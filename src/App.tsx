@@ -261,9 +261,9 @@ export function App() {
     const welcomeNotif: NotificationItem = {
       id: `notif-${Date.now()}`,
       type: 'SMS',
-      title: `Welcome to KisanSetu MP, ${user.name}`,
+      title: `Welcome to KisanSarthi MP, ${user.name}`,
       message: `Your login is verified with Mobile +91 ${user.phone}${user.maskedAadhar ? ` & Aadhaar ${user.maskedAadhar}` : ''}. Mandi slot tracking active for ${user.district}.`,
-      hindiTitle: `किसान सेतु म.प्र. में स्वागत है, ${user.name}`,
+      hindiTitle: `किसान सारथी म.प्र. में स्वागत है, ${user.name}`,
       hindiMessage: `आपका लॉगिन मोबाइल +91 ${user.phone} एवं आधार द्वारा सत्यापित है। ${user.district} हेतु मंडी टोकन शेड्यूलिंग सक्रिय है।`,
       timestamp: new Date().toISOString(),
       read: false,
@@ -641,7 +641,7 @@ export function App() {
                 <div className="w-6 h-6 rounded bg-[#2D6A4F] text-white flex items-center justify-center shadow-xs">
                   <Tractor className="w-3.5 h-3.5 text-white" />
                 </div>
-                <span>KisanSetu MP • किसान सेतु म.प्र.</span>
+                <span>KisanSarthi MP • किसान सारथी म.प्र.</span>
               </div>
               <p className="text-slate-500 text-[11px] leading-relaxed">
                 Empowering farmers across Madhya Pradesh with real-time APMC Mandi queue visibility, AI-optimized slot scheduling, moisture testing transparency, and direct DBT payouts.

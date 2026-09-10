@@ -31,6 +31,11 @@ export interface MandiCenter {
   closeTime: string;
   weighbridgesCount: number;
   dailyCapacityQuintals: number;
+  totalCapacityKg: number;
+  reservedCapacityKg: number;
+  procuredCapacityKg: number;
+  availableCapacityKg: number;
+  occupiedCapacityKg: number;
   currentTokenServing: number;
   totalTokensToday: number;
   activeTokensWaiting: number;
@@ -51,7 +56,9 @@ export type BookingStatus =
   | 'UNLOADING'
   | 'WEIGHBRIDGE_TARE'
   | 'COMPLETED'
-  | 'CANCELLED';
+  | 'CANCELLED'
+  | 'REJECTED'
+  | 'NO_SHOW';
 
 export type PaymentStatus =
   | 'PENDING'
@@ -74,6 +81,7 @@ export interface SlotBooking {
   cropId: string;
   cropName: string;
   estimatedYieldQuintals: number;
+  requestedYieldKg?: number;
   acreage: number;
   harvestDate: string;
   scheduledDate: string;
@@ -86,6 +94,9 @@ export interface SlotBooking {
   waitTimeEstimateMins: number;
   qrCodeData: string;
   createdAt: string;
+  cancelledAt?: string;
+  completedAt?: string;
+  rejectionReason?: string;
   
   // Fulfillment & QC fields
   gatePassTime?: string;
@@ -105,10 +116,28 @@ export interface SlotBooking {
 export interface TimeSlotConfig {
   timeSlot: string;
   maxCapacityQuintals: number;
+  maxCapacityKg: number;
   maxVehicles: number;
   bookedVehicles: number;
+  bookedQuantityKg: number;
+  availableQuantityKg: number;
+  availableVehicles: number;
   status: 'OPEN' | 'LIMITED' | 'FULL' | 'WEATHER_HOLD';
   estimatedWaitMins: number;
+}
+
+export interface AuditLogItem {
+  id: string;
+  timestamp: string;
+  action: string;
+  entityType: 'BOOKING' | 'MANDI' | 'SLOT' | 'MSP' | 'WEIGHBRIDGE' | 'QUEUE' | 'SYSTEM';
+  entityId: string;
+  actor: string;
+  details: string;
+  previousState?: string;
+  newState?: string;
+  quantityKgDelta?: number;
+  mandiId?: string;
 }
 
 export interface NotificationItem {

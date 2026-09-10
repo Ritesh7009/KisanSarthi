@@ -200,7 +200,7 @@ export const LoginModal: React.FC<Props> = ({ isOpen, onClose, language, onLogin
               <Tractor className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight">KisanSetu MP • किसान सेतु</h2>
+              <h2 className="text-lg font-bold text-white tracking-tight">KisanSarthi MP • किसान सारथी</h2>
               <p className="text-xs text-[#D4E09B]/90">
                 Department of Farmer Welfare, Govt. of MP
               </p>

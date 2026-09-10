@@ -23,6 +23,10 @@ kisansarthi:
     provider: ${SMS_PROVIDER:mock}
     api-key: ${SMS_API_KEY:}
     sender-id: ${SMS_SENDER_ID:KISANMP}
+    twilio:
+      trial-mode: ${TWILIO_TRIAL_MODE:${TWILIO_TRIAL:}}
+      trial-message: ${TWILIO_TRIAL_MESSAGE:Your 1234 order of 1 items has shipped and should be delivered on tomorrow. Details: https://twilio.com}
+      content-sid: ${TWILIO_TRIAL_CONTENT_SID:}
   gemini:
     api-key: ${GEMINI_API_KEY:}
   weather:

@@ -2,14 +2,30 @@ import { SlotBooking, MandiCenter, CropInfo, NotificationItem } from '../types';
 import { INITIAL_BOOKINGS, MP_MANDIS, MP_CROPS } from '../data/mpMandiData';
 
 const STORAGE_KEYS = {
-  BOOKINGS: 'kisansetu_bookings',
-  MANDIS: 'kisansetu_mandis',
-  CROPS: 'kisansetu_crops',
-  NOTIFICATIONS: 'kisansetu_notifications',
-  OFFLINE_QUEUE: 'kisansetu_offline_queue',
-  CURRENT_USER: 'kisansetu_current_user',
-  LANGUAGE: 'kisansetu_lang',
+  BOOKINGS: 'kisansarthi_bookings',
+  MANDIS: 'kisansarthi_mandis',
+  CROPS: 'kisansarthi_crops',
+  NOTIFICATIONS: 'kisansarthi_notifications',
+  OFFLINE_QUEUE: 'kisansarthi_offline_queue',
+  CURRENT_USER: 'kisansarthi_current_user',
+  LANGUAGE: 'kisansarthi_lang',
 };
+
+// Helper with backward-compatibility for previously cached keys
+function getItemWithFallback(key: string, legacyKey: string): string | null {
+  try {
+    const val = localStorage.getItem(key);
+    if (val !== null) return val;
+    const legacyVal = localStorage.getItem(legacyKey);
+    if (legacyVal !== null) {
+      localStorage.setItem(key, legacyVal);
+      return legacyVal;
+    }
+  } catch {
+    // Ignore storage access errors
+  }
+  return null;
+}
 
 export interface OfflineAction {
   id: string;
@@ -22,7 +38,7 @@ export const offlineStorage = {
   // Bookings
   getBookings(): SlotBooking[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.BOOKINGS);
+      const stored = getItemWithFallback(STORAGE_KEYS.BOOKINGS, 'kisansetu_bookings');
       if (stored) return JSON.parse(stored);
       // Initialize with default
       localStorage.setItem(STORAGE_KEYS.BOOKINGS, JSON.stringify(INITIAL_BOOKINGS));
@@ -57,7 +73,7 @@ export const offlineStorage = {
   // Mandis
   getMandis(): MandiCenter[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.MANDIS);
+      const stored = getItemWithFallback(STORAGE_KEYS.MANDIS, 'kisansetu_mandis');
       if (stored) return JSON.parse(stored);
       localStorage.setItem(STORAGE_KEYS.MANDIS, JSON.stringify(MP_MANDIS));
       return MP_MANDIS;
@@ -77,7 +93,7 @@ export const offlineStorage = {
   // Crops
   getCrops(): CropInfo[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.CROPS);
+      const stored = getItemWithFallback(STORAGE_KEYS.CROPS, 'kisansetu_crops');
       if (stored) return JSON.parse(stored);
       localStorage.setItem(STORAGE_KEYS.CROPS, JSON.stringify(MP_CROPS));
       return MP_CROPS;
@@ -97,7 +113,7 @@ export const offlineStorage = {
   // Notifications
   getNotifications(): NotificationItem[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.NOTIFICATIONS);
+      const stored = getItemWithFallback(STORAGE_KEYS.NOTIFICATIONS, 'kisansetu_notifications');
       if (stored) return JSON.parse(stored);
       return [];
     } catch {
@@ -119,7 +135,7 @@ export const offlineStorage = {
   // Offline Sync Queue
   getQueue(): OfflineAction[] {
     try {
-      const stored = localStorage.getItem(STORAGE_KEYS.OFFLINE_QUEUE);
+      const stored = getItemWithFallback(STORAGE_KEYS.OFFLINE_QUEUE, 'kisansetu_offline_queue');
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -170,7 +186,7 @@ export const clearPendingBookings = (): void => {
 
 export const getStoredLanguage = (): 'en' | 'hi' | 'mal' => {
   try {
-    const l = localStorage.getItem(STORAGE_KEYS.LANGUAGE);
+    const l = getItemWithFallback(STORAGE_KEYS.LANGUAGE, 'kisansetu_lang');
     if (l === 'hi' || l === 'mal' || l === 'en') return l;
     return 'hi'; // Default Hindi for MP farmers
   } catch {
@@ -188,7 +204,7 @@ export const setStoredLanguage = (lang: 'en' | 'hi' | 'mal'): void => {
 
 export const getStoredUser = (): any => {
   try {
-    const u = localStorage.getItem(STORAGE_KEYS.CURRENT_USER);
+    const u = getItemWithFallback(STORAGE_KEYS.CURRENT_USER, 'kisansetu_current_user');
     return u ? JSON.parse(u) : null;
   } catch {
     return null;

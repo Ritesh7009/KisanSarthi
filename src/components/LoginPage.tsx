@@ -233,7 +233,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="font-bold text-sm sm:text-base tracking-tight">KisanSetu MP • किसान सेतु</span>
+                <span className="font-bold text-sm sm:text-base tracking-tight">KisanSarthi MP • किसान सारथी</span>
                 <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-[#D4E09B]/20 text-[#D4E09B] border border-[#D4E09B]/30">
                   e-Uparjan
                 </span>
@@ -570,7 +570,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
         {/* ========================================================= */}
         <section
           id="public-mandi-overview"
-          aria-label="KisanSetu MP Agricultural Procurement Services"
+          aria-label="KisanSarthi MP Agricultural Procurement Services"
           className="w-full max-w-5xl space-y-8 mt-4"
         >
           {/* Key Metric Badges */}
@@ -663,7 +663,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
               <BadgeCheck className="w-5 h-5 text-[#2D6A4F]" />
               <span>
                 {language === 'hi'
-                  ? 'किसान सेतु पर 4 सरल चरणों में मंडी स्लॉट एवं भुगतान'
+                  ? 'किसान सारथी पर 4 सरल चरणों में मंडी स्लॉट एवं भुगतान'
                   : '4-Step Smart Mandi Slot Booking & DBT Procurement'}
               </span>
             </h2>
@@ -752,8 +752,8 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
               {[
                 {
                   id: 0,
-                  qEn: 'How to book an e-Uparjan Mandi slot on KisanSetu MP?',
-                  qHi: 'किसान सेतु पर ई-उपार्जन मंडी स्लॉट कैसे बुक करें?',
+                  qEn: 'How to book an e-Uparjan Mandi slot on KisanSarthi MP?',
+                  qHi: 'किसान सारथी पर ई-उपार्जन मंडी स्लॉट कैसे बुक करें?',
                   aEn: 'Farmers can log in using their 10-digit mobile number, choose their district and nearest APMC Mandi (or use GPS location access), enter crop yield estimates, and generate a verified digital e-token pass with a dedicated weighbridge arrival window.',
                   aHi: 'किसान अपना 10-अंकीय मोबाइल नंबर दर्ज कर तुरंत ओटीपी प्राप्त कर सकते हैं। अपनी निकटतम कृषि उपज मंडी चुनें (या जीपीएस द्वारा ऑटो-सर्च करें), फसल मात्रा भरें और निश्चित समय का डिजिटल टोकन पास प्राप्त करें।',
                 },
@@ -761,8 +761,8 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
                   id: 1,
                   qEn: 'How to track live Mandi weighbridge queues and token waiting numbers?',
                   qHi: 'मंडी तौल कांटे की लाइव कतार और टोकन नंबर कैसे देखें?',
-                  aEn: 'The KisanSetu MP Live Mandi Queue monitor displays active token serving numbers, weighbridge statuses, queue lengths, and turnaround times for major MP hubs including Sehore, Harda, Ujjain, Bhopal, Indore, and Vidisha.',
-                  aHi: 'किसान सेतु लाइव ट्रैकर पर सीहोर, हरदा, उज्जैन, भोपाल, इंदौर और विदिशा सहित प्रमुख मंडियों में चालू टोकन नंबर, तौल कांटे की स्थिति और प्रतीक्षा समय की वास्तविक जानकारी मिलती है।',
+                  aEn: 'The KisanSarthi MP Live Mandi Queue monitor displays active token serving numbers, weighbridge statuses, queue lengths, and turnaround times for major MP hubs including Sehore, Harda, Ujjain, Bhopal, Indore, and Vidisha.',
+                  aHi: 'किसान सारथी लाइव ट्रैकर पर सीहोर, हरदा, उज्जैन, भोपाल, इंदौर और विदिशा सहित प्रमुख मंडियों में चालू टोकन नंबर, तौल कांटे की स्थिति और प्रतीक्षा समय की वास्तविक जानकारी मिलती है।',
                 },
                 {
                   id: 2,
@@ -845,7 +845,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
       {/* Footer */}
       <footer className="py-4 text-center text-xs text-slate-500 border-t border-slate-200 bg-white">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>KisanSetu MP • Govt. of Madhya Pradesh Agriculture Portal</span>
+          <span>KisanSarthi MP • Govt. of Madhya Pradesh Agriculture Portal</span>
           <span className="text-[11px] text-slate-400">Security: 256-bit Encrypted • DLT Verified SMS</span>
         </div>
       </footer>

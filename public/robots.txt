@@ -1,4 +1,4 @@
-# Robots.txt for KisanSetu MP (Smart Mandi Procurement Portal)
+# Robots.txt for KisanSarthi MP (Smart Mandi Procurement Portal)
 User-agent: *
 Allow: /
 Allow: /api/mandi-centers
