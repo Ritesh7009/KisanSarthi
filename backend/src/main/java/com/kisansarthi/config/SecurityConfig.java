@@ -17,6 +17,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Configuration
@@ -66,7 +67,39 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOriginPatterns(List.of("*"));
+        
+        // Explicit allow-list of frontend origins (Render, Cloud Run, and localhost for dev)
+        List<String> allowedOrigins = new ArrayList<>(List.of(
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "https://kisansarthi-vsne.onrender.com"
+        ));
+
+        // Dynamically include deployment origin if specified in environment
+        String appUrl = System.getenv("APP_URL");
+        if (appUrl != null && !appUrl.isBlank()) {
+            allowedOrigins.add(appUrl.trim().replaceAll("/+$", ""));
+        }
+        String frontendUrl = System.getenv("FRONTEND_URL");
+        if (frontendUrl != null && !frontendUrl.isBlank()) {
+            allowedOrigins.add(frontendUrl.trim().replaceAll("/+$", ""));
+        }
+        String corsEnv = System.getenv("CORS_ALLOWED_ORIGINS");
+        if (corsEnv != null && !corsEnv.isBlank()) {
+            for (String origin : corsEnv.split(",")) {
+                if (!origin.isBlank()) {
+                    allowedOrigins.add(origin.trim().replaceAll("/+$", ""));
+                }
+            }
+        }
+
+        config.setAllowedOrigins(allowedOrigins);
+        config.setAllowedOriginPatterns(List.of(
+            "https://*.run.app",
+            "https://*.onrender.com"
+        ));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Idempotency-Key", "X-Requested-With"));
         config.setAllowCredentials(true);

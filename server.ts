@@ -1,7 +1,27 @@
+/**
+ * ============================================================================
+ * KISANSARTHI AI STUDIO DEMO / MOCK BACKEND SERVER
+ * ============================================================================
+ * NOTICE: This Node.js/Express server (`server.ts`) is a self-contained, in-memory
+ * demo and mock implementation engineered specifically for rapid Google AI Studio
+ * web deployment, container hosting, and local client preview.
+ *
+ * IT IS NOT THE CANONICAL BACKEND OR SOURCE OF TRUTH.
+ *
+ * The canonical production backend is implemented in Java / Spring Boot under the
+ * `/backend` directory (Spring Boot 3, PostgreSQL, Flyway, Redis, Spring Security).
+ *
+ * For detailed API parity mapping, behavioral differences, and response shapes,
+ * see `BACKEND_PARITY.md` in the project root.
+ * ============================================================================
+ */
+
 import express from 'express';
 import http from 'http';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import { GoogleGenAI } from '@google/genai';
@@ -29,6 +49,28 @@ import {
 
 dotenv.config();
 
+// Helper to mirror backend OtpService.java SHA-256 hash
+function hashOtp(otp: string): string {
+  return crypto.createHash('sha256').update(otp, 'utf8').digest('hex');
+}
+
+// Signed JWT token generator with real expiry, mirroring backend JwtTokenProvider.java
+const JWT_SECRET = process.env.JWT_SECRET || 'kisansarthi-secure-jwt-signing-secret-key-32chars!';
+const JWT_EXPIRATION = '1h'; // 1 hour expiration
+
+function generateSignedAccessToken(payload: {
+  userId: string;
+  role: 'FARMER' | 'ADMIN';
+  phone?: string;
+  name?: string;
+  mandiId?: string;
+}): string {
+  return jwt.sign(payload, JWT_SECRET, {
+    expiresIn: JWT_EXPIRATION,
+    subject: payload.userId,
+  });
+}
+
 // ==========================================
 // CANONICAL STATE & STORAGE
 // Concurrency-safe in-memory store with persistence
@@ -39,7 +81,7 @@ interface MandiSequenceTracker {
 
 interface StoredOtp {
   phone: string;
-  otp: string;
+  otpHash: string;
   expiresAt: number;
   attempts: number;
   lastSentAt: number;
@@ -449,11 +491,11 @@ async function startServer() {
       });
     }
 
-    // Generate secure random 6-digit OTP (Fix Bug 7)
-    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate secure random 6-digit OTP (mirroring OtpService.java SecureRandom)
+    const generatedOtp = crypto.randomInt(100000, 1000000).toString();
     otpStore.set(cleanPhone, {
       phone: cleanPhone,
-      otp: generatedOtp,
+      otpHash: hashOtp(generatedOtp),
       expiresAt: now + 5 * 60 * 1000, // 5 minutes TTL
       attempts: 0,
       lastSentAt: now,
@@ -506,33 +548,67 @@ async function startServer() {
   const handleVerifyOtp = (req: express.Request, res: express.Response) => {
     const { phone, otp } = req.body;
     const cleanPhone = String(phone || '').replace(/\D/g, '');
+    const cleanOtp = String(otp || '').trim();
 
     if (cleanPhone.length < 10) {
       return res.status(400).json({ success: false, error: 'Valid 10-digit mobile number required' });
     }
 
+    if (!cleanOtp) {
+      return res.status(400).json({ success: false, error: 'OTP verification code is required' });
+    }
+
     const stored = otpStore.get(cleanPhone);
     const now = Date.now();
 
-    // Check OTP validity
+    // Strict verification logic mirroring backend OtpService.java:
+    // - Track attempts (MAX_ATTEMPTS = 3)
+    // - Enforce 5-minute expiry (TTL)
+    // - Check SHA-256 hash match against what was dispatched
+    // - Unconditional bypass removed
+    // - Optional sandbox bypass strictly gated by DEMO_MODE=true AND only when no real OTP was issued
     let isValid = false;
     if (stored) {
       if (now > stored.expiresAt) {
         otpStore.delete(cleanPhone);
-        return res.status(400).json({ success: false, error: 'OTP has expired. Please request a new one.' });
+        return res.status(400).json({
+          success: false,
+          code: 'OTP_EXPIRED',
+          error: 'OTP has expired or does not exist. Please request a new one.',
+        });
       }
       stored.attempts += 1;
-      if (stored.attempts > 5) {
+      if (stored.attempts > 3) {
         otpStore.delete(cleanPhone);
-        return res.status(400).json({ success: false, error: 'Max verification attempts exceeded. Request a new OTP.' });
+        return res.status(400).json({
+          success: false,
+          code: 'MAX_ATTEMPTS_EXCEEDED',
+          error: 'Maximum verification attempts exceeded. Please request a new OTP.',
+        });
       }
-      if (stored.otp === otp || otp === '4826' || otp === '123456') {
+      const inputHash = hashOtp(cleanOtp);
+      if (inputHash === stored.otpHash) {
         isValid = true;
         otpStore.delete(cleanPhone);
+      } else {
+        // Never allow demo bypass when a real OTP was actually issued and doesn't match!
+        return res.status(400).json({
+          success: false,
+          error: 'Invalid verification code. Please check your SMS and try again.',
+        });
       }
-    } else if (otp === '4826' || otp === '123456' || (otp && otp.length === 6)) {
-      // Demo bypass and fallback for development/sandbox
-      isValid = true;
+    } else {
+      // No active OTP was issued or it has expired
+      const isDemoMode = process.env.DEMO_MODE === 'true';
+      if (isDemoMode && (cleanOtp === '4826' || cleanOtp === '123456')) {
+        isValid = true;
+      } else {
+        return res.status(400).json({
+          success: false,
+          code: 'OTP_EXPIRED',
+          error: 'OTP has expired or does not exist. Please request a new one.',
+        });
+      }
     }
 
     if (!isValid) {
@@ -564,7 +640,12 @@ async function startServer() {
       farmers.unshift(farmer);
     }
 
-    const accessToken = `ks-token-${farmer.id}-${Date.now()}`;
+    const accessToken = generateSignedAccessToken({
+      userId: farmer.id,
+      role: 'FARMER',
+      phone: farmer.phone,
+      name: farmer.name,
+    });
     const farmerUserData = {
       id: farmer.id,
       name: farmer.name,
@@ -627,7 +708,6 @@ async function startServer() {
 
     const officerMandiId = mandiId || 'mandi-sehore';
     const targetMandi = mandis.find((m) => m.id === officerMandiId) || mandis[0];
-    const accessToken = `ks-adm-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`;
     const adminUser = {
       id: `admin-${cleanUsername || 'officer'}`,
       name: `Officer (${cleanUsername || targetMandi.district + ' Mandi'})`,
@@ -637,6 +717,13 @@ async function startServer() {
       role: 'ADMIN' as const,
       mandiId: targetMandi.id,
     };
+    const accessToken = generateSignedAccessToken({
+      userId: adminUser.id,
+      role: 'ADMIN',
+      phone: adminUser.phone,
+      name: adminUser.name,
+      mandiId: targetMandi.id,
+    });
 
     recordAuditLog(
       'ADMIN_LOGIN',
