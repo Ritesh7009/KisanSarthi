@@ -295,16 +295,22 @@ export const FarmerDashboard: React.FC<Props> = ({
     switch (status) {
       case 'BOOKED':
         return 0;
+      case 'GATE_CALLED':
       case 'GATE_ENTERED':
         return 1;
+      case 'WEIGHING':
+      case 'WEIGHMENT_STAGE_1':
       case 'WEIGHBRIDGE_GROSS':
         return 2;
       case 'QC_INSPECTION':
         return 3;
       case 'UNLOADING':
         return 4;
+      case 'WEIGHMENT_COMPLETED':
       case 'WEIGHBRIDGE_TARE':
         return 5;
+      case 'PROCUREMENT_COMPLETED':
+      case 'PAYMENT_PROCESSING':
       case 'COMPLETED':
         return 6;
       default:
@@ -590,13 +596,60 @@ export const FarmerDashboard: React.FC<Props> = ({
                     </span>
                   </div>
                   <p className="text-slate-600">
-                    Expected Payout: <strong className="text-[#1B4332]">₹{(latestBooking.estimatedYieldQuintals * 2400).toLocaleString('en-IN')}</strong>
+                    {latestBooking.totalPayoutRs ? (
+                      <>
+                        Certified Payout: <strong className="text-[#1B4332]">₹{latestBooking.totalPayoutRs.toLocaleString('en-IN')}</strong>
+                      </>
+                    ) : (
+                      <>
+                        Expected Payout: <strong className="text-[#1B4332]">₹{(latestBooking.estimatedYieldQuintals * 2400).toLocaleString('en-IN')}</strong>
+                      </>
+                    )}
                   </p>
                   <p className="text-slate-400 font-mono text-[10px]">
-                    Linked A/C: ****{latestBooking.bankAccountLast4 || '4589'}
+                    Linked A/C: ****{latestBooking.bankAccountLast4 || '4321'} {latestBooking.dbtReferenceNo ? `• Ref: ${latestBooking.dbtReferenceNo}` : ''}
                   </p>
                 </div>
               </div>
+
+              {/* Certified Weighment & Official J-Form Certificate Banner if measured */}
+              {(latestBooking.netWeightQuintals || latestBooking.actualGrossWeightKg || latestBooking.status === 'WEIGHMENT_COMPLETED' || latestBooking.status === 'PROCUREMENT_COMPLETED' || latestBooking.status === 'COMPLETED') && (
+                <div className="mx-6 mb-5 p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4">
+                  <div className="space-y-1 text-xs text-center sm:text-left">
+                    <div className="flex items-center justify-center sm:justify-start gap-2">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-700 text-white font-bold text-[10px] uppercase tracking-wider">
+                        APMC Certified Weighment
+                      </span>
+                      {latestBooking.qualityGrade && (
+                        <span className="text-[10px] font-semibold text-emerald-800">
+                          {latestBooking.qualityGrade} (Moisture: {latestBooking.moisturePct || 10.5}%)
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-emerald-950 font-medium">
+                      Certified Net Produce:{' '}
+                      <strong className="font-mono text-sm font-bold text-emerald-900">
+                        {latestBooking.netWeightQuintals
+                          ? `${(latestBooking.netWeightQuintals * 100).toFixed(0)} kg (${latestBooking.netWeightQuintals} Qtl)`
+                          : `${(latestBooking.actualGrossWeightKg || 10500) - (latestBooking.actualTareWeightKg || 3800)} kg`}
+                      </strong>
+                    </p>
+                    {latestBooking.dbtReferenceNo && (
+                      <p className="text-[11px] text-emerald-800 font-mono">
+                        PFMS DBT Reference: <strong>{latestBooking.dbtReferenceNo}</strong>
+                      </p>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => onViewJForm(latestBooking)}
+                    className="px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer shrink-0 transition-colors"
+                  >
+                    <FileText className="w-4 h-4 text-[#D4E09B]" />
+                    <span>View Digital J-Form</span>
+                  </button>
+                </div>
+              )}
 
               {/* Sleek Interface Bottom Action Bar */}
               <div className="p-4 bg-slate-900 text-white flex flex-wrap items-center justify-center gap-6 sm:gap-10 text-xs border-t border-slate-800">

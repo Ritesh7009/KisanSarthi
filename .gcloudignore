@@ -1,0 +1,14 @@
+.gcloudignore
+.git
+.gitignore
+node_modules/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+!dist/
+!build/
+backend/target/
+*.class
+*.jar

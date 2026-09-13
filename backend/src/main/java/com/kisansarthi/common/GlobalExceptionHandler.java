@@ -26,6 +26,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.fail("RESOURCE_NOT_FOUND", ex.getMessage()));
     }
 
+    @ExceptionHandler(SlotNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSlotNotFound(SlotNotFoundException ex) {
+        log.warn("Slot not found: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                .body(ApiResponse.fail(ex.getCode(), ex.getMessage()));
+    }
+
     @ExceptionHandler(InvalidStateTransitionException.class)
     public ResponseEntity<ApiResponse<Void>> handleInvalidStateTransition(InvalidStateTransitionException ex) {
         log.warn("Invalid state transition: {}", ex.getMessage());

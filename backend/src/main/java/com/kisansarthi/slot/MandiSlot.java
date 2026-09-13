@@ -71,4 +71,23 @@ public class MandiSlot {
     public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
+
+    public int getAvailableQuintals() {
+        return Math.max(0, maxCapacityQuintals - bookedQuintals);
+    }
+
+    public int getAvailableFarmers() {
+        return Math.max(0, maxFarmers - bookedFarmers);
+    }
+
+    public void recalculateStatus() {
+        if ("CLOSED".equalsIgnoreCase(this.status)) {
+            return;
+        }
+        if (this.bookedQuintals >= this.maxCapacityQuintals || this.bookedFarmers >= this.maxFarmers) {
+            this.status = "FULL";
+        } else {
+            this.status = "AVAILABLE";
+        }
+    }
 }

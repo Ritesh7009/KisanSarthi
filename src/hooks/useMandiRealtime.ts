@@ -39,13 +39,13 @@ export function useMandiRealtime({
   onRefreshNeeded,
 }: UseMandiRealtimeOptions) {
   const [isConnected, setIsConnected] = useState(false);
-  const [reconnectAttempts, setReconnectAttempts] = useState(0);
   const [lastEvent, setLastEvent] = useState<RealtimeQueueEvent | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
   const heartbeatIntervalRef = useRef<any>(null);
   const isMountedRef = useRef(true);
+  const reconnectAttemptsRef = useRef(0);
 
   // Keep callbacks fresh in refs to avoid re-triggering connection effect
   const callbacksRef = useRef({ onTokenCalled, onQueueEvent, onStatusChange, onRefreshNeeded });
@@ -56,21 +56,24 @@ export function useMandiRealtime({
 
     // Clean up any existing connection
     if (socketRef.current) {
-      socketRef.current.close();
+      try {
+        socketRef.current.close();
+      } catch {
+        // Safe ignore
+      }
       socketRef.current = null;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-
     try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
       const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 
       ws.onopen = () => {
         if (!isMountedRef.current) return;
         setIsConnected(true);
-        setReconnectAttempts(0);
+        reconnectAttemptsRef.current = 0;
 
         // STOMP-compatible / plain WebSocket subscribe message
         const subscribePayload = JSON.stringify({
@@ -91,7 +94,7 @@ export function useMandiRealtime({
           }
         }, 25000);
 
-        // Reconnect triggered: refresh REST state from authoritative PostgreSQL server
+        // Reconnect triggered: refresh REST state
         if (callbacksRef.current.onRefreshNeeded) {
           callbacksRef.current.onRefreshNeeded();
         }
@@ -127,7 +130,7 @@ export function useMandiRealtime({
           if (data.type === 'MANDI_STATUS' && callbacksRef.current.onStatusChange) {
             callbacksRef.current.onStatusChange(data.status);
           }
-        } catch (e) {
+        } catch {
           // Non-JSON or debug frame
         }
       };
@@ -137,24 +140,25 @@ export function useMandiRealtime({
         setIsConnected(false);
         if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
 
-        // Exponential backoff reconnect: 1s, 2s, 4s, capped at 15s
-        const backoffMs = Math.min(1000 * Math.pow(1.8, reconnectAttempts), 15000);
+        // Exponential backoff reconnect: 2s, 4s, 8s, capped at 20s
+        const backoffMs = Math.min(2000 * Math.pow(1.8, reconnectAttemptsRef.current), 20000);
+        reconnectAttemptsRef.current += 1;
+
+        if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
         reconnectTimeoutRef.current = setTimeout(() => {
           if (isMountedRef.current) {
-            setReconnectAttempts((prev) => prev + 1);
             connect();
           }
         }, backoffMs);
       };
 
-      ws.onerror = (err) => {
-        console.warn('WebSocket connection note:', err);
-        // Let onclose trigger reconnect
+      ws.onerror = () => {
+        // Let onclose handle reconnect with backoff
       };
     } catch (e) {
-      console.warn('WebSocket initialization error:', e);
+      console.warn('WebSocket initialization note:', e);
     }
-  }, [mandiId, reconnectAttempts]);
+  }, [mandiId, enabled]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -165,7 +169,11 @@ export function useMandiRealtime({
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
       if (socketRef.current) {
-        socketRef.current.close();
+        try {
+          socketRef.current.close();
+        } catch {
+          // Ignore
+        }
         socketRef.current = null;
       }
     };
@@ -173,7 +181,7 @@ export function useMandiRealtime({
 
   return {
     isConnected,
-    reconnectAttempts,
+    reconnectAttempts: reconnectAttemptsRef.current,
     lastEvent,
     reconnectManually: connect,
   };

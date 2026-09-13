@@ -1,6 +1,6 @@
 {
   "name": "KisanSarthi MP - Smart Mandi Procurement & Queue Management",
-  "description": "Pan-India real-time procurement scheduling, AI slot booking, live APMC and e-NAM mandi queue management, and DBT payment tracking for farmers across all Indian states.",
+  "description": "Pan-India real-time procurement scheduling, AI slot booking, electronic weighbridge integration, moisture QC certification, live APMC queue management, and PFMS Direct Benefit Transfer (DBT) payment tracking for farmers.",
   "requestFramePermissions": ["geolocation"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

@@ -3,11 +3,13 @@ import { Language, UserRole } from '../types';
 import {
   getStoredLanguage,
   setStoredLanguage,
+  getStoredUser,
   setStoredUser,
 } from '../utils/offlineStorage';
 import { setAuthToken } from '../services/api';
 
 export interface AuthUser {
+  id?: string;
   name: string;
   phone: string;
   aadharNumber?: string;
@@ -22,10 +24,23 @@ interface UseAuthSessionProps {
   onLoginSuccessCallback?: (user: AuthUser) => void;
 }
 
+const DEFAULT_DEMO_FARMER: AuthUser = {
+  name: 'Ramesh Patel',
+  phone: '9826014522',
+  aadharNumber: '710488214522',
+  maskedAadhar: 'XXXX-XXXX-4522',
+  district: 'Sehore',
+  village: 'Bijora',
+  role: 'FARMER',
+};
+
 export function useAuthSession({ onLoginSuccessCallback }: UseAuthSessionProps = {}) {
   const [language, setLanguage] = useState<Language>(() => getStoredLanguage());
   const [role, setRole] = useState<UserRole>('FARMER');
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    const stored = getStoredUser();
+    return stored || DEFAULT_DEMO_FARMER;
+  });
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
 
   const handleLanguageChange = useCallback((lang: Language) => {

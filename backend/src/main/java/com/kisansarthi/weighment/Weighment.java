@@ -27,11 +27,11 @@ public class Weighment {
     @Column(name = "weighbridge_bay", nullable = false, length = 20)
     private String weighbridgeBay = "Kanta Bay 1";
 
-    @Column(name = "gross_weight_quintals", nullable = false, precision = 8, scale = 2)
+    @Column(name = "gross_weight_quintals", precision = 8, scale = 2)
     private BigDecimal grossWeightQuintals;
 
-    @Column(name = "gross_weighed_at", nullable = false)
-    private OffsetDateTime grossWeighedAt = OffsetDateTime.now();
+    @Column(name = "gross_weighed_at")
+    private OffsetDateTime grossWeighedAt;
 
     @Column(name = "tare_weight_quintals", precision = 8, scale = 2)
     private BigDecimal tareWeightQuintals;

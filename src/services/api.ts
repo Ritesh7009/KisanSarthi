@@ -466,10 +466,35 @@ export const notificationApi = {
 // 9. WEIGHMENT & PAYMENTS API
 // ==========================================
 export const weighmentApi = {
-  async recordWeighment(bookingId: string, data: any): Promise<any> {
-    return request(`/api/v1/bookings/${bookingId}/weighment`, {
+  async startWeighment(bookingId: string, weighbridgeBay?: string, operatorName?: string): Promise<any> {
+    const params = new URLSearchParams();
+    if (weighbridgeBay) params.append('weighbridgeBay', weighbridgeBay);
+    if (operatorName) params.append('operatorName', operatorName);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return request(`/api/v1/bookings/${bookingId}/weighment/start${qs}`, {
+      method: 'POST',
+    });
+  },
+
+  async recordWeighment(bookingId: string, data: any, operatorName?: string): Promise<any> {
+    const qs = operatorName ? `?operatorName=${encodeURIComponent(operatorName)}` : '';
+    return request(`/api/v1/bookings/${bookingId}/weighment${qs}`, {
       method: 'POST',
       body: JSON.stringify(data),
+    });
+  },
+
+  async completeWeighment(bookingId: string, operatorName?: string): Promise<any> {
+    const qs = operatorName ? `?operatorName=${encodeURIComponent(operatorName)}` : '';
+    return request(`/api/v1/bookings/${bookingId}/weighment/complete${qs}`, {
+      method: 'POST',
+    });
+  },
+
+  async completeProcurement(bookingId: string, officerName?: string): Promise<any> {
+    const qs = officerName ? `?officerName=${encodeURIComponent(officerName)}` : '';
+    return request(`/api/v1/bookings/${bookingId}/procurement/complete${qs}`, {
+      method: 'POST',
     });
   },
 
@@ -483,10 +508,17 @@ export const paymentApi = {
     return request(`/api/v1/bookings/${bookingId}/payment`);
   },
 
-  async initiatePayment(bookingId: string, data: any): Promise<any> {
+  async initiatePayment(bookingId: string, data?: any): Promise<any> {
     return request(`/api/v1/bookings/${bookingId}/payment`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(data || {}),
+    });
+  },
+
+  async confirmPaymentCredit(bookingId: string, dbtReferenceNo?: string): Promise<any> {
+    const qs = dbtReferenceNo ? `?dbtReferenceNo=${encodeURIComponent(dbtReferenceNo)}` : '';
+    return request(`/api/v1/bookings/${bookingId}/payment/confirm${qs}`, {
+      method: 'POST',
     });
   },
 };
@@ -537,13 +569,74 @@ export const aiApi = {
 };
 
 // ==========================================
-// 12. REPORTS API
+// 12. REPORTS API (PHASE 4 DYNAMIC ANALYTICS)
 // ==========================================
+import type {
+  StatewideOverview,
+  MandiPerformanceItem,
+  BottleneckAlert,
+  CropProcurementReport,
+  QualityAndWeighmentReport,
+  PaymentAnalyticsReport,
+  TimeSeriesPoint,
+  ProcurementRegisterRow,
+} from '../types/reportTypes';
+
 export const reportApi = {
+  async getStatewideOverview(): Promise<StatewideOverview> {
+    const res = await request<StatewideOverview>('/api/v1/reports/overview');
+    return (res as any)?.data || res;
+  },
+
   async getDistrictStats(district?: string): Promise<DistrictProcurementStat[]> {
     const qs = district ? `?district=${encodeURIComponent(district)}` : '';
     const res = await request<{ stats: DistrictProcurementStat[] } | DistrictProcurementStat[]>(`/api/v1/reports/district-stats${qs}`);
-    return Array.isArray(res) ? res : res.stats || [];
+    return Array.isArray(res) ? res : res.stats || (res as any).data?.stats || [];
+  },
+
+  async getMandiPerformance(district?: string): Promise<MandiPerformanceItem[]> {
+    const qs = district ? `?district=${encodeURIComponent(district)}` : '';
+    const res = await request<{ data: MandiPerformanceItem[] } | MandiPerformanceItem[]>(`/api/v1/reports/mandi-performance${qs}`);
+    return Array.isArray(res) ? res : (res as any).data || [];
+  },
+
+  async getBottlenecks(): Promise<BottleneckAlert[]> {
+    const res = await request<{ data: BottleneckAlert[] } | BottleneckAlert[]>('/api/v1/reports/bottlenecks');
+    return Array.isArray(res) ? res : (res as any).data || [];
+  },
+
+  async getCropReports(): Promise<CropProcurementReport[]> {
+    const res = await request<{ data: CropProcurementReport[] } | CropProcurementReport[]>('/api/v1/reports/crops');
+    return Array.isArray(res) ? res : (res as any).data || [];
+  },
+
+  async getQualityAndWeighmentReport(): Promise<QualityAndWeighmentReport> {
+    const res = await request<QualityAndWeighmentReport>('/api/v1/reports/quality-weighment');
+    return (res as any)?.data || res;
+  },
+
+  async getPaymentAnalytics(delayThresholdHours = 24): Promise<PaymentAnalyticsReport> {
+    const res = await request<PaymentAnalyticsReport>(`/api/v1/reports/payment-analytics?delayThresholdHours=${delayThresholdHours}`);
+    return (res as any)?.data || res;
+  },
+
+  async getTimeSeries(days = 7): Promise<TimeSeriesPoint[]> {
+    const res = await request<{ data: TimeSeriesPoint[] } | TimeSeriesPoint[]>(`/api/v1/reports/time-series?days=${days}`);
+    return Array.isArray(res) ? res : (res as any).data || [];
+  },
+
+  async getProcurementRegister(params?: { district?: string; mandiId?: string; cropId?: string }): Promise<ProcurementRegisterRow[]> {
+    const sp = new URLSearchParams();
+    if (params?.district) sp.append('district', params.district);
+    if (params?.mandiId) sp.append('mandiId', params.mandiId);
+    if (params?.cropId) sp.append('cropId', params.cropId);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    const res = await request<{ data: ProcurementRegisterRow[] } | ProcurementRegisterRow[]>(`/api/v1/reports/procurement-register${qs}`);
+    return Array.isArray(res) ? res : (res as any).data || [];
+  },
+
+  getExportCsvUrl(): string {
+    return apiUrl('/api/v1/reports/export/csv');
   },
 };
 

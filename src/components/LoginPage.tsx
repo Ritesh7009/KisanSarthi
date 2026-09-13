@@ -28,6 +28,7 @@ interface Props {
   language: Language;
   onLanguageChange: (lang: Language) => void;
   onLoginSuccess: (user: {
+    id?: string;
     name: string;
     phone: string;
     aadharNumber?: string;

@@ -48,6 +48,7 @@ import {
 import { translations } from '../i18n/translations';
 import { DISTRICT_PROCUREMENT_STATS, STANDARD_TIME_SLOTS } from '../data/mpMandiData';
 import { AdminSmsDispatchModal } from './AdminSmsDispatchModal';
+import { WeighbridgePaymentHub } from './WeighbridgePaymentHub';
 import { apiUrl, getAuthToken } from '../services/api';
 
 interface Props {
@@ -133,24 +134,6 @@ export const AdminDashboard: React.FC<Props> = ({
   // Filter bookings for this Mandi
   const mandiBookings = bookings.filter((b) => b.mandiCenterId === selectedMandiId);
 
-  // Weighment entry state for the active truck
-  const activeBooking = mandiBookings.find(
-    (b) => b.status === 'GATE_ENTERED' || b.status === 'WEIGHBRIDGE_GROSS' || b.status === 'QC_INSPECTION'
-  ) || mandiBookings[0];
-
-  const [grossInput, setGrossInput] = useState(
-    activeBooking?.actualGrossWeightKg ? String(activeBooking.actualGrossWeightKg) : '10500'
-  );
-  const [tareInput, setTareInput] = useState(
-    activeBooking?.actualTareWeightKg ? String(activeBooking.actualTareWeightKg) : '3900'
-  );
-  const [moistureInput, setMoistureInput] = useState(
-    activeBooking?.moisturePct ? String(activeBooking.moisturePct) : '10.5'
-  );
-  const [qcGradeInput, setQcGradeInput] = useState<'Grade A' | 'Grade B' | 'Standard Fair Average (FAQ)'>(
-    'Grade A'
-  );
-
   // MSP Edit state
   const [editingCropId, setEditingCropId] = useState(crops[0]?.id || 'crop-wheat');
   const targetCrop = crops.find((c) => c.id === editingCropId) || crops[0];
@@ -162,29 +145,6 @@ export const AdminDashboard: React.FC<Props> = ({
 
   // Search in farmer bookings list
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Handle weighment save & J-Form trigger
-  const handleSaveWeighment = async () => {
-    if (!activeBooking) return;
-    const gross = Number(grossInput) || 10500;
-    const tare = Number(tareInput) || 3900;
-    const netKg = Math.max(0, gross - tare);
-    const netQtl = netKg / 100;
-    const rate = 2400; // MSP
-    const payout = netQtl * rate;
-
-    await onUpdateBookingStatus(activeBooking.id, {
-      actualGrossWeightKg: gross,
-      actualTareWeightKg: tare,
-      netWeightQuintals: netQtl,
-      moisturePct: Number(moistureInput) || 10.5,
-      qualityGrade: qcGradeInput,
-      totalPayoutRs: payout,
-      status: 'COMPLETED',
-      paymentStatus: 'DBT_INITIATED',
-      utrNumber: `MPDBT${Date.now()}`,
-    });
-  };
 
   // Handle MSP update
   const handleSaveMsp = async (e: React.FormEvent) => {
@@ -414,134 +374,16 @@ export const AdminDashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          {/* Weighbridge Entry & Verification Form */}
-          {activeBooking ? (
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8">
-              <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#1B4332] bg-[#D4E09B]/40 border border-[#A3B18A]/40 px-2.5 py-0.5 rounded-full">
-                    Now at Weighbridge Bay
-                  </span>
-                  <h3 className="text-base font-bold text-slate-900 mt-1.5">
-                    Token {activeBooking.tokenNumber} • {activeBooking.farmerName}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Commodity: <strong>{activeBooking.cropName}</strong> • Vehicle: <strong>{activeBooking.vehicleNumber}</strong>
-                  </p>
-                </div>
-
-                <div className="text-right">
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-100 text-slate-700">
-                    Status: {activeBooking.status}
-                  </span>
-                </div>
-              </div>
-
-              {/* Weighment Entry Inputs */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Gross Loaded Weight (kg)
-                  </label>
-                  <input
-                    type="number"
-                    value={grossInput}
-                    onChange={(e) => setGrossInput(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-[#F3F6F1]/60 border border-slate-300 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-                    placeholder="10500"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Truck + Grain</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Empty Tare Weight (kg)
-                  </label>
-                  <input
-                    type="number"
-                    value={tareInput}
-                    onChange={(e) => setTareInput(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-[#F3F6F1]/60 border border-slate-300 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-                    placeholder="3900"
-                  />
-                  <p className="text-[10px] text-slate-400 mt-1">Empty Tractor Trolley</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Moisture Content (%)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={moistureInput}
-                    onChange={(e) => setMoistureInput(e.target.value)}
-                    className="w-full py-2.5 px-3 bg-[#F3F6F1]/60 border border-slate-300 rounded-xl font-mono font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-                    placeholder="10.5"
-                  />
-                  <p className="text-[10px] text-[#2D6A4F] font-semibold mt-1">FAQ Limit: ≤12.0%</p>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                    Quality QC Grade
-                  </label>
-                  <select
-                    value={qcGradeInput}
-                    onChange={(e) => setQcGradeInput(e.target.value as any)}
-                    className="w-full py-2.5 px-3 bg-[#F3F6F1]/60 border border-slate-300 rounded-xl font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-                  >
-                    <option value="Grade A">Grade A (FAQ Standard)</option>
-                    <option value="Grade B">Grade B (Marginal Dockage)</option>
-                    <option value="Standard Fair Average (FAQ)">Standard FAQ</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Net Computed Payout Preview */}
-              <div className="mt-5 p-4 bg-[#F3F6F1]/70 rounded-2xl border border-slate-200/80 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div>
-                  <span className="text-slate-500">Net Weight: </span>
-                  <strong className="font-mono text-[#1B4332] text-sm">
-                    {Math.max(0, (Number(grossInput) || 0) - (Number(tareInput) || 0))} kg (
-                    {((Math.max(0, (Number(grossInput) || 0) - (Number(tareInput) || 0))) / 100).toFixed(2)} Quintals)
-                  </strong>
-                </div>
-
-                <div>
-                  <span className="text-slate-500">Procurement Payout @ ₹2,400/Qtl: </span>
-                  <strong className="font-mono text-[#1B4332] text-sm">
-                    ₹{(
-                      ((Math.max(0, (Number(grossInput) || 0) - (Number(tareInput) || 0))) / 100) * 2400
-                    ).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
-                  </strong>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSaveWeighment}
-                    className="px-5 py-2.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer transition-colors"
-                  >
-                    <CheckCircle2 className="w-4 h-4 text-[#D4E09B]" />
-                    <span>Confirm Weighment & Issue J-Form</span>
-                  </button>
-                  {activeBooking.status === 'COMPLETED' && (
-                    <button
-                      onClick={() => onViewJForm(activeBooking)}
-                      className="px-4 py-2.5 bg-[#2D6A4F] hover:bg-[#1B4332] text-white font-bold text-xs uppercase tracking-wider rounded-xl flex items-center gap-1.5 cursor-pointer transition-colors"
-                    >
-                      <FileText className="w-3.5 h-3.5" />
-                      <span>Print Slip</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="p-8 bg-white rounded-3xl border border-slate-200 text-center text-xs text-slate-500">
-              No vehicles currently checked in to the weighbridge bay. Click 'Call Next Token' to summon.
-            </div>
-          )}
+          {/* Phase 3: Electronic Weighbridge & Direct Benefit Transfer Terminal */}
+          <WeighbridgePaymentHub
+            mandi={selectedMandi}
+            bookings={bookings}
+            crops={crops}
+            currentUser={currentUser}
+            onUpdateBookingStatus={onUpdateBookingStatus}
+            onViewJForm={onViewJForm}
+            language={language}
+          />
         </div>
       )}
 
@@ -1009,7 +851,7 @@ export const AdminDashboard: React.FC<Props> = ({
                       </td>
                       <td className="p-3.5">
                         <div className="font-mono text-[11px] text-slate-700">
-                          {f.bankAccount ? `•••• ${f.bankAccount.slice(-4)}` : 'Aadhaar DBT'}
+                          {f.bankAccountLast4 ? `•••• ${f.bankAccountLast4}` : 'Aadhaar DBT'}
                         </div>
                         <div className="text-[10px] text-slate-400">{f.ifscCode || 'SBIN0001234'}</div>
                       </td>

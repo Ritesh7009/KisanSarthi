@@ -3,19 +3,22 @@ package com.kisansarthi.queue;
 import com.kisansarthi.booking.Booking;
 import com.kisansarthi.mandi.Mandi;
 import jakarta.persistence.*;
+import org.springframework.data.domain.Persistable;
 import java.time.OffsetDateTime;
 
 @Entity
 @Table(name = "queue_state")
-public class QueueState {
+public class QueueState implements Persistable<String> {
 
     @Id
     @Column(name = "mandi_id", length = 50)
     private String mandiId;
 
-    @OneToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "mandi_id", insertable = false, updatable = false)
+    @Transient
     private Mandi mandi;
+
+    @Transient
+    private boolean isNewEntity = false;
 
     @Column(name = "current_serving_token", nullable = false)
     private int currentServingToken = 0;
@@ -43,6 +46,21 @@ public class QueueState {
 
     public QueueState(String mandiId) {
         this.mandiId = mandiId;
+        this.isNewEntity = true;
+    }
+
+    @Override
+    public String getId() {
+        return mandiId;
+    }
+
+    @Override
+    public boolean isNew() {
+        return isNewEntity;
+    }
+
+    public void setNewEntity(boolean isNewEntity) {
+        this.isNewEntity = isNewEntity;
     }
 
     public String getMandiId() {

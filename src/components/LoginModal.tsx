@@ -23,6 +23,7 @@ interface Props {
   onClose?: () => void;
   language: Language;
   onLoginSuccess: (user: {
+    id?: string;
     name: string;
     phone: string;
     aadharNumber?: string;

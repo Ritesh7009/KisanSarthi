@@ -1,5 +1,6 @@
 package com.kisansarthi.booking;
 
+import com.kisansarthi.common.*;
 import com.kisansarthi.crop.Crop;
 import com.kisansarthi.crop.CropRepository;
 import com.kisansarthi.farmer.Farmer;
@@ -8,14 +9,20 @@ import com.kisansarthi.mandi.Mandi;
 import com.kisansarthi.mandi.MandiRepository;
 import com.kisansarthi.queue.QueueEventDto;
 import com.kisansarthi.queue.QueueService;
+import com.kisansarthi.slot.MandiSlot;
+import com.kisansarthi.slot.SlotRepository;
+import com.kisansarthi.slot.SlotService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.context.TestPropertySource;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.concurrent.*;
@@ -25,10 +32,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest
 @ActiveProfiles("test")
+@TestPropertySource(properties = {
+        "spring.datasource.url=jdbc:h2:mem:kisansarthi_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE",
+        "spring.datasource.driver-class-name=org.h2.Driver",
+        "spring.datasource.username=sa",
+        "spring.datasource.password=",
+        "spring.flyway.enabled=false"
+})
 public class BookingConcurrencyTest {
 
     @Autowired
     private BookingService bookingService;
+
+    @Autowired
+    private SlotService slotService;
 
     @Autowired
     private QueueService queueService;
@@ -48,43 +65,104 @@ public class BookingConcurrencyTest {
     @Autowired
     private MandiTokenSequenceRepository sequenceRepository;
 
+    @Autowired
+    private SlotRepository slotRepository;
+
+    @Autowired
+    private com.kisansarthi.queue.QueueStateRepository queueStateRepository;
+
+    @Autowired
+    private com.kisansarthi.queue.QueueEventRepository queueEventRepository;
+
     private Mandi testMandi;
     private Crop testCrop;
     private List<Farmer> testFarmers;
+    private MandiSlot testSlot;
+
+    private void cleanTestData() {
+        queueEventRepository.deleteAllInBatch();
+        // Clear active booking pointer first to prevent FK constraint violations
+        queueStateRepository.findAll().forEach(qs -> {
+            if (qs.getActiveBooking() != null) {
+                qs.setActiveBooking(null);
+                queueStateRepository.save(qs);
+            }
+        });
+        queueStateRepository.flush();
+        queueStateRepository.deleteAllInBatch();
+        bookingRepository.deleteAllInBatch();
+        sequenceRepository.deleteAllInBatch();
+        slotRepository.deleteAllInBatch();
+    }
+
+    @AfterEach
+    void tearDown() {
+        cleanTestData();
+    }
 
     @BeforeEach
     void setUp() {
-        bookingRepository.deleteAll();
-        sequenceRepository.deleteAll();
+        cleanTestData();
+        sequenceRepository.save(new MandiTokenSequence("mandi-sehore-test", LocalDate.now(), 0));
 
         // Ensure test mandi exists
-        testMandi = mandiRepository.findById("mandi-sehore-test").orElseGet(() -> {
+        if (!mandiRepository.existsById("mandi-sehore-test")) {
             Mandi m = new Mandi();
             m.setId("mandi-sehore-test");
             m.setName("Sehore Test Mandi");
+            m.setHindiName("सीहोर टेस्ट मंडी");
             m.setDistrict("Sehore");
+            m.setHindiDistrict("सीहोर");
+            m.setAddress("Mandi Complex, Sehore, MP");
+            m.setPinCode("466001");
+            m.setPhone("07562224411");
             m.setCurrentTokenServing(0);
             m.setTotalTokensToday(0);
             m.setActiveTokensWaiting(0);
-            return mandiRepository.save(m);
-        });
+            testMandi = mandiRepository.save(m);
+        } else {
+            mandiRepository.resetCounters("mandi-sehore-test");
+            testMandi = mandiRepository.findById("mandi-sehore-test").orElseThrow();
+        }
 
-        // Reset Mandi counters
-        testMandi.setCurrentTokenServing(0);
-        testMandi.setTotalTokensToday(0);
-        testMandi.setActiveTokensWaiting(0);
-        mandiRepository.save(testMandi);
+        // Reset/init QueueState
+        com.kisansarthi.queue.QueueState q = queueStateRepository.findById("mandi-sehore-test")
+                .orElseGet(() -> new com.kisansarthi.queue.QueueState("mandi-sehore-test"));
+        q.setCurrentServingToken(0);
+        q.setTotalTokensGenerated(0);
+        q.setWaitingCount(0);
+        q.setActiveBooking(null);
+        queueStateRepository.save(q);
 
         // Ensure test crop exists
         testCrop = cropRepository.findById("crop-wheat-test").orElseGet(() -> {
             Crop c = new Crop();
             c.setId("crop-wheat-test");
             c.setName("Wheat Test Grade");
+            c.setHindiName("गेहूँ शरबती");
+            c.setSeason("RABI");
             c.setStandardMspPerQuintal(new BigDecimal("2275.00"));
             c.setMpBonusPerQuintal(new BigDecimal("150.00"));
             c.setTotalMsp(new BigDecimal("2425.00"));
+            c.setMarketPricePerQuintal(new BigDecimal("2300.00"));
             return cropRepository.save(c);
         });
+
+        // Ensure test slot exists with generous capacity for 100 concurrent requests
+        testSlot = new MandiSlot();
+        testSlot.setId("slot-sehore-test-0810");
+        testSlot.setMandiId(testMandi.getId());
+        testSlot.setSlotLabel("08:00 AM - 10:00 AM");
+        testSlot.setStartTime("08:00");
+        testSlot.setEndTime("10:00");
+        testSlot.setMaxCapacityQuintals(10000);
+        testSlot.setBookedQuintals(0);
+        testSlot.setMaxFarmers(200);
+        testSlot.setBookedFarmers(0);
+        testSlot.setStatus("AVAILABLE");
+        testSlot.setCreatedAt(Instant.now());
+        testSlot.setUpdatedAt(Instant.now());
+        testSlot = slotRepository.save(testSlot);
 
         // Create a pool of farmers for testing
         testFarmers = new ArrayList<>();
@@ -92,9 +170,9 @@ public class BookingConcurrencyTest {
             String phone = String.format("98000%05d", i);
             Farmer f = farmerRepository.findByPhone(phone).orElseGet(() -> {
                 Farmer newFarmer = new Farmer();
+                newFarmer.setKisanId("KISAN-" + phone);
                 newFarmer.setName("Farmer Test " + phone);
                 newFarmer.setPhone(phone);
-                newFarmer.setAadharNumber("7104882" + String.format("%05d", phone.hashCode() % 100000));
                 newFarmer.setMaskedAadhar("XXXX-XXXX-" + phone.substring(phone.length() - 4));
                 newFarmer.setDistrict("Sehore");
                 newFarmer.setVillage("Bilkisganj");
@@ -199,6 +277,8 @@ public class BookingConcurrencyTest {
             bookingService.createBooking(req, "seed-key-" + i, null);
         }
 
+        queueStateRepository.updateCounters(testMandi.getId(), 0, 10, 10);
+
         int advanceCalls = 5;
         ExecutorService executor = Executors.newFixedThreadPool(advanceCalls);
         CountDownLatch start = new CountDownLatch(1);
@@ -214,7 +294,7 @@ public class BookingConcurrencyTest {
                     QueueEventDto dto = queueService.advanceQueue(testMandi.getId(), "Operator-" + operatorId);
                     results.add(dto);
                 } catch (Exception e) {
-                    // Log
+                    e.printStackTrace();
                 } finally {
                     done.countDown();
                 }
@@ -233,5 +313,207 @@ public class BookingConcurrencyTest {
             assertTrue(calledTokens.add(dto.getCurrentToken()), "Collision in called tokens: " + dto.getCurrentToken());
         }
         assertEquals(5, calledTokens.size());
+    }
+
+    @Test
+    @DisplayName("Verify slot capacity limits: prevent overbooking quintals and enforce maximum farmer limit")
+    void testSlotCapacityExhaustionAndFarmerLimit() {
+        MandiSlot smallSlot = new MandiSlot();
+        smallSlot.setId("slot-small-test");
+        smallSlot.setMandiId(testMandi.getId());
+        smallSlot.setSlotLabel("02:00 PM - 04:00 PM");
+        smallSlot.setStartTime("14:00");
+        smallSlot.setEndTime("16:00");
+        smallSlot.setMaxCapacityQuintals(100);
+        smallSlot.setBookedQuintals(0);
+        smallSlot.setMaxFarmers(2);
+        smallSlot.setBookedFarmers(0);
+        smallSlot.setStatus("AVAILABLE");
+        slotRepository.save(smallSlot);
+
+        // 1. First farmer books 60 quintals: should succeed
+        CreateBookingRequest req1 = new CreateBookingRequest();
+        req1.setFarmerId(testFarmers.get(0).getId());
+        req1.setMandiId(testMandi.getId());
+        req1.setCropId(testCrop.getId());
+        req1.setScheduledDate(LocalDate.now());
+        req1.setTimeSlot("02:00 PM - 04:00 PM");
+        req1.setVehicleType("TRACTOR_TROLLEY");
+        req1.setVehicleNumber("MP-04-T-1001");
+        req1.setEstimatedYieldQuintals(new BigDecimal("60.00"));
+
+        BookingResponse res1 = bookingService.createBooking(req1, "req-small-1", null);
+        assertNotNull(res1);
+
+        MandiSlot afterReq1 = slotRepository.findById(smallSlot.getId()).orElseThrow();
+        assertEquals(60, afterReq1.getBookedQuintals());
+        assertEquals(1, afterReq1.getBookedFarmers());
+        assertEquals("AVAILABLE", afterReq1.getStatus());
+
+        // 2. Second farmer attempts 50 quintals (exceeds 40 available): must fail with InsufficientSlotCapacityException
+        CreateBookingRequest req2Exceed = new CreateBookingRequest();
+        req2Exceed.setFarmerId(testFarmers.get(1).getId());
+        req2Exceed.setMandiId(testMandi.getId());
+        req2Exceed.setCropId(testCrop.getId());
+        req2Exceed.setScheduledDate(LocalDate.now());
+        req2Exceed.setTimeSlot("02:00 PM - 04:00 PM");
+        req2Exceed.setVehicleType("TRACTOR_TROLLEY");
+        req2Exceed.setVehicleNumber("MP-04-T-1002");
+        req2Exceed.setEstimatedYieldQuintals(new BigDecimal("50.00"));
+
+        assertThrows(InsufficientSlotCapacityException.class, () ->
+                bookingService.createBooking(req2Exceed, "req-small-2-exceed", null));
+
+        // 3. Second farmer requests exact remaining 40 quintals: should succeed and mark slot FULL
+        req2Exceed.setEstimatedYieldQuintals(new BigDecimal("40.00"));
+        BookingResponse res2 = bookingService.createBooking(req2Exceed, "req-small-2-success", null);
+        assertNotNull(res2);
+
+        MandiSlot afterReq2 = slotRepository.findById(smallSlot.getId()).orElseThrow();
+        assertEquals(100, afterReq2.getBookedQuintals());
+        assertEquals(2, afterReq2.getBookedFarmers());
+        assertEquals("FULL", afterReq2.getStatus());
+
+        // 4. Third farmer attempts to book even 1 quintal: must fail with FarmerLimitReachedException or InsufficientSlotCapacityException
+        CreateBookingRequest req3 = new CreateBookingRequest();
+        req3.setFarmerId(testFarmers.get(2).getId());
+        req3.setMandiId(testMandi.getId());
+        req3.setCropId(testCrop.getId());
+        req3.setScheduledDate(LocalDate.now());
+        req3.setTimeSlot("02:00 PM - 04:00 PM");
+        req3.setVehicleType("TRACTOR_TROLLEY");
+        req3.setVehicleNumber("MP-04-T-1003");
+        req3.setEstimatedYieldQuintals(new BigDecimal("1.00"));
+
+        assertThrows(BusinessException.class, () ->
+                bookingService.createBooking(req3, "req-small-3", null));
+    }
+
+    @Test
+    @DisplayName("Verify slot capacity release and waiting count decrement on booking cancellation")
+    void testSlotCapacityReleaseOnCancellation() {
+        CreateBookingRequest req = new CreateBookingRequest();
+        req.setFarmerId(testFarmers.get(0).getId());
+        req.setMandiId(testMandi.getId());
+        req.setCropId(testCrop.getId());
+        req.setScheduledDate(LocalDate.now());
+        req.setTimeSlot("08:00 AM - 10:00 AM");
+        req.setVehicleType("TRACTOR_TROLLEY");
+        req.setVehicleNumber("MP-04-AB-9999");
+        req.setEstimatedYieldQuintals(new BigDecimal("55.00"));
+
+        BookingResponse created = bookingService.createBooking(req, "cancel-test-key", null);
+        assertNotNull(created);
+
+        MandiSlot bookedSlot = slotRepository.findById(testSlot.getId()).orElseThrow();
+        assertEquals(55, bookedSlot.getBookedQuintals());
+        assertEquals(1, bookedSlot.getBookedFarmers());
+
+        Mandi mandiBeforeCancel = mandiRepository.findById(testMandi.getId()).orElseThrow();
+        int waitingBefore = mandiBeforeCancel.getActiveTokensWaiting();
+
+        // Cancel booking
+        BookingResponse cancelled = bookingService.cancelBooking(created.getId(), "testUser");
+        assertEquals("CANCELLED", cancelled.getStatus());
+
+        // Verify slot capacity was released
+        MandiSlot releasedSlot = slotRepository.findById(testSlot.getId()).orElseThrow();
+        assertEquals(0, releasedSlot.getBookedQuintals());
+        assertEquals(0, releasedSlot.getBookedFarmers());
+
+        // Verify active waiting tokens count was decremented
+        Mandi mandiAfterCancel = mandiRepository.findById(testMandi.getId()).orElseThrow();
+        assertEquals(waitingBefore - 1, mandiAfterCancel.getActiveTokensWaiting());
+
+        // Repeated cancellation must throw BookingAlreadyCancelledException
+        assertThrows(BookingAlreadyCancelledException.class, () ->
+                bookingService.cancelBooking(created.getId(), "testUser"));
+    }
+
+    @Test
+    @DisplayName("Verify administrative capacity reduction below current bookings is rejected")
+    void testCapacityReductionPreventedWhenBookingsExist() {
+        CreateBookingRequest req = new CreateBookingRequest();
+        req.setFarmerId(testFarmers.get(0).getId());
+        req.setMandiId(testMandi.getId());
+        req.setCropId(testCrop.getId());
+        req.setScheduledDate(LocalDate.now());
+        req.setTimeSlot("08:00 AM - 10:00 AM");
+        req.setVehicleType("TRACTOR_TROLLEY");
+        req.setVehicleNumber("MP-04-AB-1234");
+        req.setEstimatedYieldQuintals(new BigDecimal("50.00"));
+
+        bookingService.createBooking(req, "admin-cap-key", null);
+
+        // Attempting to reduce maxCapacityQuintals to 40 (less than 50 booked) must fail
+        MandiSlot reductionUpdate = new MandiSlot();
+        reductionUpdate.setMaxCapacityQuintals(40);
+
+        assertThrows(CapacityReductionNotAllowedException.class, () ->
+                slotService.updateSlot(testSlot.getId(), reductionUpdate));
+
+        // Expanding capacity must succeed
+        reductionUpdate.setMaxCapacityQuintals(20000);
+        MandiSlot updated = slotService.updateSlot(testSlot.getId(), reductionUpdate);
+        assertEquals(20000, updated.getMaxCapacityQuintals());
+    }
+
+    @Test
+    @DisplayName("Verify validation: past dates, closed slots, and non-positive yields are rejected")
+    void testBookingValidations() {
+        // 1. Past date
+        CreateBookingRequest pastDateReq = new CreateBookingRequest();
+        pastDateReq.setFarmerId(testFarmers.get(0).getId());
+        pastDateReq.setMandiId(testMandi.getId());
+        pastDateReq.setCropId(testCrop.getId());
+        pastDateReq.setScheduledDate(LocalDate.now().minusDays(1));
+        pastDateReq.setTimeSlot("08:00 AM - 10:00 AM");
+        pastDateReq.setVehicleType("TRACTOR_TROLLEY");
+        pastDateReq.setVehicleNumber("MP-04-AB-0001");
+        pastDateReq.setEstimatedYieldQuintals(new BigDecimal("25.00"));
+
+        assertThrows(InvalidBookingDateException.class, () ->
+                bookingService.createBooking(pastDateReq, "past-date-key", null));
+
+        // 2. Non-positive yield
+        CreateBookingRequest zeroYieldReq = new CreateBookingRequest();
+        zeroYieldReq.setFarmerId(testFarmers.get(0).getId());
+        zeroYieldReq.setMandiId(testMandi.getId());
+        zeroYieldReq.setCropId(testCrop.getId());
+        zeroYieldReq.setScheduledDate(LocalDate.now());
+        zeroYieldReq.setTimeSlot("08:00 AM - 10:00 AM");
+        zeroYieldReq.setVehicleType("TRACTOR_TROLLEY");
+        zeroYieldReq.setVehicleNumber("MP-04-AB-0001");
+        zeroYieldReq.setEstimatedYieldQuintals(new BigDecimal("0.00"));
+
+        assertThrows(InvalidBookingQuantityException.class, () ->
+                bookingService.createBooking(zeroYieldReq, "zero-yield-key", null));
+
+        // 3. Closed slot
+        MandiSlot closedSlot = new MandiSlot();
+        closedSlot.setId("slot-closed-test");
+        closedSlot.setMandiId(testMandi.getId());
+        closedSlot.setSlotLabel("06:00 PM - 08:00 PM");
+        closedSlot.setStartTime("18:00");
+        closedSlot.setEndTime("20:00");
+        closedSlot.setMaxCapacityQuintals(1000);
+        closedSlot.setBookedQuintals(0);
+        closedSlot.setMaxFarmers(50);
+        closedSlot.setBookedFarmers(0);
+        closedSlot.setStatus("CLOSED");
+        slotRepository.save(closedSlot);
+
+        CreateBookingRequest closedSlotReq = new CreateBookingRequest();
+        closedSlotReq.setFarmerId(testFarmers.get(0).getId());
+        closedSlotReq.setMandiId(testMandi.getId());
+        closedSlotReq.setCropId(testCrop.getId());
+        closedSlotReq.setScheduledDate(LocalDate.now());
+        closedSlotReq.setTimeSlot("06:00 PM - 08:00 PM");
+        closedSlotReq.setVehicleType("TRACTOR_TROLLEY");
+        closedSlotReq.setVehicleNumber("MP-04-AB-0001");
+        closedSlotReq.setEstimatedYieldQuintals(new BigDecimal("25.00"));
+
+        assertThrows(SlotClosedException.class, () ->
+                bookingService.createBooking(closedSlotReq, "closed-slot-key", null));
     }
 }

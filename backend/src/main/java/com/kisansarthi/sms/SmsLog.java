@@ -33,6 +33,18 @@ public class SmsLog {
     @Column(name = "delivery_report", columnDefinition = "TEXT")
     private String deliveryReport;
 
+    @Column(name = "dlt_template_id", length = 100)
+    private String dltTemplateId;
+
+    @Column(name = "dispatched_by", length = 150)
+    private String dispatchedBy;
+
+    @Column(length = 50)
+    private String channel;
+
+    @Column(name = "delivery_receipt_id", length = 100)
+    private String deliveryReceiptId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -73,14 +85,16 @@ public class SmsLog {
     public Instant getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 
+    public String getDltTemplateId() { return dltTemplateId; }
+    public void setDltTemplateId(String dltTemplateId) { this.dltTemplateId = dltTemplateId; }
+    public String getDispatchedBy() { return dispatchedBy; }
+    public void setDispatchedBy(String dispatchedBy) { this.dispatchedBy = dispatchedBy; }
+    public String getChannel() { return channel; }
+    public void setChannel(String channel) { this.channel = channel; }
+    public String getDeliveryReceiptId() { return deliveryReceiptId; }
+    public void setDeliveryReceiptId(String deliveryReceiptId) { this.deliveryReceiptId = deliveryReceiptId; }
+
     public String getDispatchedAt() {
         return createdAt != null ? createdAt.toString() : Instant.now().toString();
-    }
-
-    public String getDeliveryReceiptId() {
-        if (deliveryReport != null && deliveryReport.contains("Ref: ")) {
-            return deliveryReport.substring(deliveryReport.indexOf("Ref: ") + 5).trim();
-        }
-        return deliveryReport;
     }
 }

@@ -58,6 +58,11 @@ export type BookingStatus =
   | 'BOOKED'
   | 'GATE_CALLED'
   | 'GATE_ENTERED'
+  | 'WEIGHING'
+  | 'WEIGHMENT_STAGE_1'
+  | 'WEIGHMENT_COMPLETED'
+  | 'PROCUREMENT_COMPLETED'
+  | 'PAYMENT_PROCESSING'
   | 'WEIGHBRIDGE_GROSS'
   | 'QC_INSPECTION'
   | 'UNLOADING'
@@ -69,9 +74,11 @@ export type BookingStatus =
 
 export type PaymentStatus =
   | 'PENDING'
+  | 'PROCESSING'
   | 'VERIFIED'
   | 'DBT_INITIATED'
-  | 'CREDITED_TO_BANK';
+  | 'CREDITED_TO_BANK'
+  | 'COMPLETED';
 
 export interface SlotBooking {
   id: string;
@@ -110,6 +117,8 @@ export interface SlotBooking {
   gatePassTime?: string;
   actualGrossWeightKg?: number;
   actualTareWeightKg?: number;
+  grossWeightQuintals?: number;
+  tareWeightQuintals?: number;
   netWeightQuintals?: number;
   moisturePct?: number;
   foreignMatterPct?: number;
@@ -117,7 +126,10 @@ export interface SlotBooking {
   totalPayoutRs?: number;
   paymentStatus: PaymentStatus;
   utrNumber?: string;
+  dbtReferenceNo?: string;
+  paymentDate?: string;
   bankAccountLast4?: string;
+  bankIfsc?: string;
   syncedOffline?: boolean;
 }
 
@@ -239,10 +251,10 @@ export interface SmsLogItem {
   message: string;
   senderHeader: string; // e.g. "VK-EUPARJAN"
   dltTemplateId: string;
-  status: 'DELIVERED' | 'SENT' | 'FAILED' | 'PENDING';
+  status: 'DELIVERED' | 'SENT' | 'FAILED' | 'PENDING' | 'ACCEPTED' | 'QUEUED';
   dispatchedAt: string;
   dispatchedBy: string; // e.g. "Admin (Mandi Secretary, Sehore)"
-  channel: 'SMS_GATEWAY' | 'WEB_SMS' | 'SIM_DIRECT';
+  channel: 'SMS_GATEWAY' | 'WEB_SMS' | 'SIM_DIRECT' | 'TWILIO_TRIAL_TEST';
   deliveryReceiptId: string;
 }
 

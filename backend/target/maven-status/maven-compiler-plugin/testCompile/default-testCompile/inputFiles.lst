@@ -1,0 +1,3 @@
+/app/applet/backend/src/test/java/com/kisansarthi/booking/BookingConcurrencyTest.java
+/app/applet/backend/src/test/java/com/kisansarthi/report/ReportServiceIntegrationTest.java
+/app/applet/backend/src/test/java/com/kisansarthi/weighment/WeighmentLifecycleTest.java
