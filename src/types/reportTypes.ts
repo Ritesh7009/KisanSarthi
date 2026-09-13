@@ -81,7 +81,8 @@ export interface PaymentDelayAlert {
   mandiName: string;
   netPayableAmount: number;
   paymentStatus: string;
-  completedAt: string;
+  initiatedAt?: string;
+  completedAt?: string;
   delayHours: number;
   maskedAccount: string;
 }
@@ -94,6 +95,8 @@ export interface PaymentAnalyticsReport {
   totalAmountSettledRs: number;
   totalAmountPendingRs: number;
   averageSettlementHours: number;
+  totalDelayedPaymentsCount?: number;
+  totalDelayedAmountRs?: number;
   delayedPayments: PaymentDelayAlert[];
 }
 

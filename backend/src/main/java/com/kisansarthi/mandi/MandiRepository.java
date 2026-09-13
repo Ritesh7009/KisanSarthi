@@ -13,6 +13,8 @@ import java.util.List;
 public interface MandiRepository extends JpaRepository<Mandi, String> {
     List<Mandi> findByDistrictIgnoreCase(String district);
 
+    long countByGateStatusIgnoreCase(String gateStatus);
+
     @Transactional
     @Modifying(clearAutomatically = true)
     @Query("UPDATE Mandi m SET m.currentTokenServing = 0, m.totalTokensToday = 0, m.activeTokensWaiting = 0 WHERE m.id = :id")
@@ -28,3 +30,4 @@ public interface MandiRepository extends JpaRepository<Mandi, String> {
     @Query("UPDATE Mandi m SET m.activeTokensWaiting = CASE WHEN m.activeTokensWaiting > 0 THEN m.activeTokensWaiting - 1 ELSE 0 END WHERE m.id = :id")
     void decrementActiveWaiting(@Param("id") String id);
 }
+

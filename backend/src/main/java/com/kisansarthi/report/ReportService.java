@@ -80,10 +80,7 @@ public class ReportService {
         BigDecimal totalDbtDisbursed = paymentRepository.sumSettledPayments().setScale(2, RoundingMode.HALF_UP);
         long totalFarmersServed = bookingRepository.countDistinctFarmersByStatusIn(COMPLETED_STATUSES);
 
-        List<Mandi> allMandis = mandiRepository.findAll();
-        long totalActiveMandis = allMandis.stream()
-                .filter(m -> "OPEN".equalsIgnoreCase(m.getGateStatus()))
-                .count();
+        long totalActiveMandis = mandiRepository.countByGateStatusIgnoreCase("OPEN");
 
         List<BookingStatus> queueStatuses = List.of(
                 BookingStatus.GATE_CALLED,
@@ -506,10 +503,17 @@ public class ReportService {
         dto.setMaxMoisturePct(maxMoist);
         dto.setAverageForeignMatterPct(avgFm);
 
-        // Dockage quantity = totalNet * avgFm / 100
-        BigDecimal totalDockage = totalNet.multiply(avgFm).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        // True mathematical dockage: SUM(net_weight * foreign_matter_pct / 100)
+        BigDecimal totalDockage = s.length > 8 && s[8] != null
+                ? ((BigDecimal) s[8]).setScale(2, RoundingMode.HALF_UP)
+                : totalNet.multiply(avgFm).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         dto.setTotalDockageQuintals(totalDockage);
-        dto.setDockagePercentage(avgFm.doubleValue());
+
+        // Effective dockage percentage = (totalDockage / totalNet) * 100
+        double effectiveDockagePct = totalNet.compareTo(BigDecimal.ZERO) > 0
+                ? totalDockage.multiply(new BigDecimal("100")).divide(totalNet, 2, RoundingMode.HALF_UP).doubleValue()
+                : avgFm.doubleValue();
+        dto.setDockagePercentage(effectiveDockagePct);
 
         // Moisture FAQ threshold check directly aggregated in SQL (no moisture row loops or full table scans)
         List<Object[]> moistureStats = weighmentRepository.getMoistureComplianceStats();
@@ -574,6 +578,7 @@ public class ReportService {
                     completedCount += count;
                 } else if ("FAILED".equals(status)) {
                     failedCount += count;
+                    // FAILED payments require remediation and re-initiation, included in pending pool
                     totalPendingRs = totalPendingRs.add(amount);
                 } else if ("INITIATED".equals(status) || "PROCESSING".equals(status)) {
                     initiatedCount += count;
@@ -585,10 +590,23 @@ public class ReportService {
             }
         }
 
-        // 2. Fetch only genuine delayed non-completed payments based on SLA cutoff
+        // 2. Fetch aggregate delayed payment metrics directly from SQL
         OffsetDateTime now = OffsetDateTime.now();
         OffsetDateTime cutoffTime = now.minusHours(delaySlaHours);
-        List<Payment> delayedPayments = paymentRepository.findDelayedPaymentsWithDetails(cutoffTime);
+
+        long totalDelayedCount = 0;
+        BigDecimal totalDelayedAmount = BigDecimal.ZERO;
+        List<Object[]> delayedMetrics = paymentRepository.aggregateDelayedPaymentMetrics(cutoffTime);
+        if (!delayedMetrics.isEmpty() && delayedMetrics.get(0) != null) {
+            Object[] dm = delayedMetrics.get(0);
+            totalDelayedCount = dm[0] != null ? ((Number) dm[0]).longValue() : 0L;
+            totalDelayedAmount = dm[1] != null ? (BigDecimal) dm[1] : BigDecimal.ZERO;
+        }
+
+        // 3. Fetch strictly bounded top-N delayed payments (oldest delay first)
+        org.springframework.data.domain.PageRequest delayPageRequest =
+                org.springframework.data.domain.PageRequest.of(0, ReportConstants.MAX_DELAYED_PAYMENT_ALERTS);
+        List<Payment> delayedPayments = paymentRepository.findDelayedPaymentsWithDetailsBounded(cutoffTime, delayPageRequest);
 
         List<PaymentAnalyticsReportDto.PaymentDelayAlertDto> delayed = new ArrayList<>();
         for (Payment p : delayedPayments) {
@@ -612,31 +630,16 @@ public class ReportService {
             }
             alert.setNetPayableAmount(netAmount);
             alert.setPaymentStatus(status);
-            alert.setCompletedAt(p.getCreatedAt().toString());
+            alert.setInitiatedAt(referenceTime.toString());
+            alert.setCompletedAt(referenceTime.toString()); // Preserved for backwards compatibility
             alert.setDelayHours(hours);
             alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
             delayed.add(alert);
         }
 
-        // 3. Real settlement hours calculation from actual timestamps
-        List<Object[]> timestamps = paymentRepository.findCompletedPaymentSettlementTimestamps();
-        double avgSettlementHours = 0.0;
-        if (!timestamps.isEmpty()) {
-            long totalMinutes = 0;
-            long sampleCount = 0;
-            for (Object[] pair : timestamps) {
-                if (pair[0] instanceof OffsetDateTime init && pair[1] instanceof OffsetDateTime cred) {
-                    long minutes = Duration.between(init, cred).toMinutes();
-                    if (minutes >= 0) {
-                        totalMinutes += minutes;
-                        sampleCount++;
-                    }
-                }
-            }
-            if (sampleCount > 0) {
-                avgSettlementHours = Math.round((totalMinutes / 60.0 / sampleCount) * 10.0) / 10.0;
-            }
-        }
+        // 4. Pure PostgreSQL calculation of average settlement hours
+        Double dbAvgHours = paymentRepository.calculateAverageSettlementHoursNative();
+        double avgSettlementHours = dbAvgHours != null ? Math.round(dbAvgHours * 10.0) / 10.0 : 0.0;
 
         PaymentAnalyticsReportDto dto = new PaymentAnalyticsReportDto();
         dto.setTotalDbtInitiated(initiatedCount + completedCount);
@@ -646,6 +649,8 @@ public class ReportService {
         dto.setTotalAmountSettledRs(totalSettledRs.setScale(2, RoundingMode.HALF_UP));
         dto.setTotalAmountPendingRs(totalPendingRs.setScale(2, RoundingMode.HALF_UP));
         dto.setAverageSettlementHours(avgSettlementHours);
+        dto.setTotalDelayedPaymentsCount(totalDelayedCount);
+        dto.setTotalDelayedAmountRs(totalDelayedAmount.setScale(2, RoundingMode.HALF_UP));
         dto.setDelayedPayments(delayed);
 
         return dto;
@@ -692,15 +697,19 @@ public class ReportService {
     // ==========================================
     @Transactional(readOnly = true)
     public List<ProcurementRegisterRowDto> getProcurementRegister(String district, String mandiId, String cropId) {
-        List<Booking> bookings = bookingRepository.findFilteredForRegister(district, mandiId, cropId);
-        return mapBookingsToRegisterRows(bookings);
+        // Enforce strict server-side bounding (max 200) for non-paginated compatibility endpoint
+        org.springframework.data.domain.PageRequest pageRequest =
+                org.springframework.data.domain.PageRequest.of(0, ReportConstants.MAX_REGISTER_PAGE_SIZE);
+        org.springframework.data.domain.Page<Booking> bookingPage =
+                bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, pageRequest);
+        return mapBookingsToRegisterRows(bookingPage.getContent());
     }
 
     @Transactional(readOnly = true)
     public PaginatedProcurementRegisterDto getPaginatedProcurementRegister(
             String district, String mandiId, String cropId, int page, int size
     ) {
-        int boundedSize = Math.max(1, Math.min(size, 200)); // Cap max page size to 200
+        int boundedSize = Math.max(1, Math.min(size, ReportConstants.MAX_REGISTER_PAGE_SIZE));
         int boundedPage = Math.max(0, page);
         org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(boundedPage, boundedSize);
 
@@ -720,6 +729,52 @@ public class ReportService {
         );
     }
 
+    /**
+     * Memory-bounded progressive streaming of procurement register directly to an output stream in batches.
+     */
+    @Transactional(readOnly = true)
+    public void streamProcurementRegisterCsv(
+            String district,
+            String mandiId,
+            String cropId,
+            java.io.OutputStream outputStream
+    ) throws java.io.IOException {
+        CsvStreamWriter csvWriter = new CsvStreamWriter(outputStream);
+        csvWriter.writeHeader(
+                "Token Number", "Scheduled Date", "Farmer Name", "Phone", "Masked Aadhaar",
+                "District", "Mandi", "Crop", "Booked Qtl", "Net Weight Qtl", "Moisture %",
+                "Foreign Matter %", "Payout Rs", "Status", "DBT Status", "DBT Ref",
+                "Bank Account", "IFSC", "Completed At"
+        );
+
+        int pageIndex = 0;
+        int batchSize = ReportConstants.CSV_EXPORT_BATCH_SIZE;
+        boolean hasMore = true;
+
+        while (hasMore) {
+            org.springframework.data.domain.PageRequest pageRequest =
+                    org.springframework.data.domain.PageRequest.of(pageIndex, batchSize);
+
+            org.springframework.data.domain.Page<Booking> bookingPage =
+                    bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, pageRequest);
+
+            List<Booking> batchBookings = bookingPage.getContent();
+            if (batchBookings.isEmpty()) {
+                break;
+            }
+
+            List<ProcurementRegisterRowDto> rows = mapBookingsToRegisterRows(batchBookings);
+            for (ProcurementRegisterRowDto row : rows) {
+                csvWriter.writeProcurementRow(row);
+            }
+
+            hasMore = !bookingPage.isLast() && (pageIndex + 1 < bookingPage.getTotalPages());
+            pageIndex++;
+        }
+
+        csvWriter.flush();
+    }
+
     private List<ProcurementRegisterRowDto> mapBookingsToRegisterRows(List<Booking> bookings) {
         if (bookings.isEmpty()) {
             return Collections.emptyList();
@@ -727,7 +782,7 @@ public class ReportService {
 
         List<UUID> bookingIds = bookings.stream().map(Booking::getId).toList();
 
-        // Fetch weighments and payments ONLY for the filtered booking IDs (eliminates unbounded findAll)
+        // Fetch weighments and payments ONLY for the filtered booking IDs of this batch (bounded memory)
         Map<UUID, Weighment> weighmentByBooking = weighmentRepository.findByBookingIdIn(bookingIds).stream()
                 .collect(Collectors.toMap(w -> w.getBooking().getId(), w -> w, (a, b) -> a));
 

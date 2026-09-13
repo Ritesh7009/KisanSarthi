@@ -656,8 +656,13 @@ export const reportApi = {
     return (res as any)?.data || res;
   },
 
-  getExportCsvUrl(): string {
-    return apiUrl('/api/v1/reports/export/csv');
+  getExportCsvUrl(params?: { district?: string; mandiId?: string; cropId?: string }): string {
+    const sp = new URLSearchParams();
+    if (params?.district) sp.append('district', params.district);
+    if (params?.mandiId) sp.append('mandiId', params.mandiId);
+    if (params?.cropId) sp.append('cropId', params.cropId);
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    return apiUrl(`/api/v1/reports/export/csv${qs}`);
   },
 };
 

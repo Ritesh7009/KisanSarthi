@@ -1,5 +1,6 @@
 package com.kisansarthi.payment;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -37,21 +38,33 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
            "GROUP BY p.paymentStatus")
     List<Object[]> aggregatePaymentCountsAndAmountsByStatus();
 
-    @Query("SELECT p FROM Payment p " +
+    @Query("SELECT COUNT(p), COALESCE(SUM(p.netPayableAmount), 0) FROM Payment p " +
+           "WHERE UPPER(p.paymentStatus) <> 'COMPLETED' " +
+           "AND COALESCE(p.initiatedAt, p.createdAt) <= :cutoffTime")
+    List<Object[]> aggregateDelayedPaymentMetrics(@Param("cutoffTime") OffsetDateTime cutoffTime);
+
+    @Query(value = "SELECT p FROM Payment p " +
            "JOIN FETCH p.farmer f " +
            "JOIN FETCH p.mandi m " +
            "JOIN FETCH p.booking b " +
            "WHERE UPPER(p.paymentStatus) <> 'COMPLETED' " +
+           "AND COALESCE(p.initiatedAt, p.createdAt) <= :cutoffTime " +
+           "ORDER BY COALESCE(p.initiatedAt, p.createdAt) ASC",
+           countQuery = "SELECT COUNT(p) FROM Payment p " +
+           "WHERE UPPER(p.paymentStatus) <> 'COMPLETED' " +
            "AND COALESCE(p.initiatedAt, p.createdAt) <= :cutoffTime")
-    List<Payment> findDelayedPaymentsWithDetails(@Param("cutoffTime") OffsetDateTime cutoffTime);
+    List<Payment> findDelayedPaymentsWithDetailsBounded(@Param("cutoffTime") OffsetDateTime cutoffTime, Pageable pageable);
 
-    @Query("SELECT p.initiatedAt, p.creditedAt " +
-           "FROM Payment p " +
-           "WHERE UPPER(p.paymentStatus) = 'COMPLETED' " +
-           "AND p.initiatedAt IS NOT NULL " +
-           "AND p.creditedAt IS NOT NULL")
-    List<Object[]> findCompletedPaymentSettlementTimestamps();
+    @Query(value = "SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (p.credited_at - p.initiated_at)) / 3600.0), 0.0) " +
+           "FROM payments p " +
+           "WHERE UPPER(p.payment_status) = 'COMPLETED' " +
+           "AND p.initiated_at IS NOT NULL " +
+           "AND p.credited_at IS NOT NULL " +
+           "AND p.credited_at >= p.initiated_at",
+           nativeQuery = true)
+    Double calculateAverageSettlementHoursNative();
 }
+
 
 
 

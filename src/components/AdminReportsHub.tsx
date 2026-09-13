@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp,
   Scale,
@@ -21,6 +21,8 @@ import {
   ShieldCheck,
   Truck,
   Droplets,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -49,6 +51,7 @@ import {
   PaymentAnalyticsReport,
   TimeSeriesPoint,
   ProcurementRegisterRow,
+  PaginatedProcurementRegister,
 } from '../types/reportTypes';
 import { MandiCenter, CropInfo } from '../types';
 
@@ -67,6 +70,12 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
   const [selectedCrop, setSelectedCrop] = useState<string>('ALL');
   const [registerSearch, setRegisterSearch] = useState<string>('');
 
+  // Pagination states for register
+  const [registerPage, setRegisterPage] = useState<number>(0);
+  const [registerPageSize, setRegisterPageSize] = useState<number>(50);
+  const [paginatedRegister, setPaginatedRegister] = useState<PaginatedProcurementRegister | null>(null);
+  const [isRegisterLoading, setIsRegisterLoading] = useState(false);
+
   // Data states
   const [overview, setOverview] = useState<StatewideOverview | null>(null);
   const [districtStats, setDistrictStats] = useState<any[]>([]);
@@ -76,7 +85,23 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
   const [qualityReport, setQualityReport] = useState<QualityAndWeighmentReport | null>(null);
   const [paymentReport, setPaymentReport] = useState<PaymentAnalyticsReport | null>(null);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([]);
-  const [procurementRegister, setProcurementRegister] = useState<ProcurementRegisterRow[]>([]);
+
+  const fetchRegisterData = useCallback(async (page: number, size: number) => {
+    setIsRegisterLoading(true);
+    try {
+      const data = await reportApi.getPaginatedProcurementRegister({
+        district: selectedDistrict === 'ALL' ? undefined : selectedDistrict,
+        cropId: selectedCrop === 'ALL' ? undefined : selectedCrop,
+        page,
+        size,
+      });
+      setPaginatedRegister(data);
+    } catch (err) {
+      console.error('Failed to load paginated register', err);
+    } finally {
+      setIsRegisterLoading(false);
+    }
+  }, [selectedDistrict, selectedCrop]);
 
   const fetchAllReports = async () => {
     setIsLoading(true);
@@ -90,7 +115,6 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
         qc,
         pay,
         ts,
-        reg,
       ] = await Promise.all([
         reportApi.getStatewideOverview().catch(() => null),
         reportApi.getDistrictStats(selectedDistrict === 'ALL' ? undefined : selectedDistrict).catch(() => []),
@@ -100,10 +124,6 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
         reportApi.getQualityAndWeighmentReport().catch(() => null),
         reportApi.getPaymentAnalytics().catch(() => null),
         reportApi.getTimeSeries(7).catch(() => []),
-        reportApi.getProcurementRegister({
-          district: selectedDistrict === 'ALL' ? undefined : selectedDistrict,
-          cropId: selectedCrop === 'ALL' ? undefined : selectedCrop,
-        }).catch(() => []),
       ]);
 
       if (ov) setOverview(ov);
@@ -114,7 +134,8 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
       if (qc) setQualityReport(qc);
       if (pay) setPaymentReport(pay);
       if (ts) setTimeSeries(ts);
-      if (reg) setProcurementRegister(reg);
+
+      await fetchRegisterData(registerPage, registerPageSize);
     } catch (err) {
       console.error('Failed to load reports data', err);
     } finally {
@@ -126,10 +147,15 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
     fetchAllReports();
   }, [selectedDistrict, selectedCrop]);
 
+  useEffect(() => {
+    fetchRegisterData(registerPage, registerPageSize);
+  }, [registerPage, registerPageSize, fetchRegisterData]);
+
   const uniqueDistricts = Array.from(new Set(mandis.map((m) => m.district))).sort();
 
-  // Filtered register rows
-  const filteredRegister = procurementRegister.filter((row) => {
+  // Filtered register rows based on active page content
+  const registerRows = paginatedRegister?.content || [];
+  const filteredRegister = registerRows.filter((row) => {
     const q = registerSearch.toLowerCase();
     return (
       !q ||
@@ -170,12 +196,32 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
             <span className="text-slate-500 font-medium">District:</span>
             <select
               value={selectedDistrict}
-              onChange={(e) => setSelectedDistrict(e.target.value)}
+              onChange={(e) => {
+                setSelectedDistrict(e.target.value);
+                setRegisterPage(0);
+              }}
               className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
             >
               <option value="ALL">All MP Districts</option>
               {uniqueDistricts.map((d) => (
                 <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5 bg-[#F3F6F1] px-3 py-1.5 rounded-xl border border-slate-200 text-xs">
+            <span className="text-slate-500 font-medium">Crop:</span>
+            <select
+              value={selectedCrop}
+              onChange={(e) => {
+                setSelectedCrop(e.target.value);
+                setRegisterPage(0);
+              }}
+              className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer"
+            >
+              <option value="ALL">All Crops</option>
+              {crops.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
           </div>
@@ -190,7 +236,10 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
           </button>
 
           <a
-            href={reportApi.getExportCsvUrl()}
+            href={reportApi.getExportCsvUrl({
+              district: selectedDistrict === 'ALL' ? undefined : selectedDistrict,
+              cropId: selectedCrop === 'ALL' ? undefined : selectedCrop,
+            })}
             download
             className="px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
           >
@@ -628,11 +677,11 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
                   DBT Pipeline & Escalation Watchlist (&gt;24 Hours)
                 </h4>
                 <p className="text-xs text-slate-500">
-                  Transactions pending treasury release or bank batch settlement.
+                  Transactions pending treasury release or bank batch settlement. Total delayed volume: ₹{((paymentReport.totalDelayedAmountRs || 0) / 100000).toFixed(2)}L
                 </p>
               </div>
               <span className="text-xs font-bold text-amber-800 bg-amber-100 px-3 py-1 rounded-xl">
-                {paymentReport.delayedPayments.length} Pending Actions
+                {paymentReport.totalDelayedPaymentsCount ?? paymentReport.delayedPayments.length} Total Delayed
               </span>
             </div>
 
@@ -693,23 +742,52 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
         <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div>
-              <h4 className="text-sm font-bold text-slate-900">
-                Official Madhya Pradesh Mandi Procurement Register
-              </h4>
+              <div className="flex items-center gap-2">
+                <h4 className="text-sm font-bold text-slate-900">
+                  Official Madhya Pradesh Mandi Procurement Register
+                </h4>
+                {isRegisterLoading && (
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-[#2D6A4F]" />
+                )}
+              </div>
               <p className="text-xs text-slate-500">
                 Immutable record of farmer tokens, moisture testing slips, weight metrics, and bank DBT references.
+                {paginatedRegister && (
+                  <span className="font-semibold text-slate-700 ml-1">
+                    (Showing {paginatedRegister.totalElements.toLocaleString()} records across {paginatedRegister.totalPages} pages)
+                  </span>
+                )}
               </p>
             </div>
 
-            <div className="relative w-full sm:w-72">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={registerSearch}
-                onChange={(e) => setRegisterSearch(e.target.value)}
-                placeholder="Search token, farmer name, phone..."
-                className="w-full pl-9 pr-3 py-2 text-xs bg-[#F3F6F1] border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
-              />
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 bg-[#F3F6F1] px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs">
+                <span className="text-slate-500 text-[11px] font-medium">Page Size:</span>
+                <select
+                  value={registerPageSize}
+                  onChange={(e) => {
+                    setRegisterPageSize(Number(e.target.value));
+                    setRegisterPage(0);
+                  }}
+                  className="bg-transparent font-bold text-slate-800 outline-none cursor-pointer text-xs"
+                >
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200 (Max)</option>
+                </select>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                <input
+                  type="text"
+                  value={registerSearch}
+                  onChange={(e) => setRegisterSearch(e.target.value)}
+                  placeholder="Filter page by token, farmer..."
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-[#F3F6F1] border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+                />
+              </div>
             </div>
           </div>
 
@@ -730,48 +808,112 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRegister.map((r) => (
-                  <tr key={r.bookingId} className="hover:bg-[#F3F6F1]/50 transition-colors">
-                    <td className="p-3.5 font-mono font-bold text-[#1B4332]">{r.tokenNumber}</td>
-                    <td className="p-3.5 text-slate-600 whitespace-nowrap">{r.scheduledDate}</td>
-                    <td className="p-3.5">
-                      <div className="font-bold text-slate-900">{r.farmerName}</div>
-                      <div className="text-[10px] text-slate-500">{r.farmerPhone}</div>
-                    </td>
-                    <td className="p-3.5">
-                      <div className="text-slate-800 line-clamp-1">{r.mandiName}</div>
-                      <div className="text-[10px] text-slate-500">{r.district}</div>
-                    </td>
-                    <td className="p-3.5 font-medium text-slate-900">{r.cropName}</td>
-                    <td className="p-3.5 font-mono font-bold text-[#1B4332]">
-                      {r.netWeightQuintals} Qtl
-                    </td>
-                    <td className="p-3.5 font-mono text-slate-700">
-                      {r.moisturePercentage}%
-                    </td>
-                    <td className="p-3.5 font-mono font-bold text-slate-900">
-                      ₹{r.totalPayoutRs.toLocaleString()}
-                    </td>
-                    <td className="p-3.5">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                          r.paymentStatus === 'PAID' || r.paymentStatus === 'COMPLETED'
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-amber-100 text-amber-800'
-                        }`}
-                      >
-                        {r.paymentStatus}
-                      </span>
-                    </td>
-                    <td className="p-3.5">
-                      <div className="font-mono text-slate-700">{r.bankAccountLast4}</div>
-                      <div className="text-[10px] text-slate-400 font-mono">{r.ifscCode}</div>
+                {filteredRegister.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="text-center py-10 text-slate-400 text-xs">
+                      {isRegisterLoading ? 'Loading procurement records...' : 'No procurement records match current filters.'}
                     </td>
                   </tr>
-                ))}
+                ) : (
+                  filteredRegister.map((r) => (
+                    <tr key={r.bookingId} className="hover:bg-[#F3F6F1]/50 transition-colors">
+                      <td className="p-3.5 font-mono font-bold text-[#1B4332]">{r.tokenNumber}</td>
+                      <td className="p-3.5 text-slate-600 whitespace-nowrap">{r.scheduledDate}</td>
+                      <td className="p-3.5">
+                        <div className="font-bold text-slate-900">{r.farmerName}</div>
+                        <div className="text-[10px] text-slate-500">{r.farmerPhone}</div>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="text-slate-800 line-clamp-1">{r.mandiName}</div>
+                        <div className="text-[10px] text-slate-500">{r.district}</div>
+                      </td>
+                      <td className="p-3.5 font-medium text-slate-900">{r.cropName}</td>
+                      <td className="p-3.5 font-mono font-bold text-[#1B4332]">
+                        {r.netWeightQuintals} Qtl
+                      </td>
+                      <td className="p-3.5 font-mono text-slate-700">
+                        {r.moisturePercentage}%
+                      </td>
+                      <td className="p-3.5 font-mono font-bold text-slate-900">
+                        ₹{r.totalPayoutRs.toLocaleString()}
+                      </td>
+                      <td className="p-3.5">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                            r.paymentStatus === 'PAID' || r.paymentStatus === 'COMPLETED'
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          {r.paymentStatus}
+                        </span>
+                      </td>
+                      <td className="p-3.5">
+                        <div className="font-mono text-slate-700">{r.bankAccountLast4}</div>
+                        <div className="text-[10px] text-slate-400 font-mono">{r.ifscCode}</div>
+                      </td>
+                    </tr>
+                  ))
+                )}
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {paginatedRegister && paginatedRegister.totalPages > 1 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100 text-xs">
+              <span className="text-slate-500">
+                Page <span className="font-bold text-slate-800">{paginatedRegister.page + 1}</span> of{' '}
+                <span className="font-bold text-slate-800">{paginatedRegister.totalPages}</span>{' '}
+                ({paginatedRegister.totalElements.toLocaleString()} records)
+              </span>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setRegisterPage((prev) => Math.max(0, prev - 1))}
+                  disabled={registerPage === 0 || isRegisterLoading}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Previous</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {Array.from({ length: Math.min(5, paginatedRegister.totalPages) }, (_, i) => {
+                    let pageNum = i;
+                    if (paginatedRegister.totalPages > 5) {
+                      const start = Math.max(0, Math.min(registerPage - 2, paginatedRegister.totalPages - 5));
+                      pageNum = start + i;
+                    }
+                    const isActive = pageNum === registerPage;
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setRegisterPage(pageNum)}
+                        disabled={isRegisterLoading}
+                        className={`w-8 h-8 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                          isActive
+                            ? 'bg-[#1B4332] text-white'
+                            : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {pageNum + 1}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <button
+                  onClick={() => setRegisterPage((prev) => Math.min(paginatedRegister.totalPages - 1, prev + 1))}
+                  disabled={paginatedRegister.last || isRegisterLoading}
+                  className="px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 font-semibold transition-colors cursor-pointer"
+                >
+                  <span>Next</span>
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -102,52 +102,19 @@ public class ReportController {
     }
 
     @GetMapping("/export/csv")
-    @Operation(summary = "Export complete procurement register as CSV for state audits and e-Uparjan reporting")
-    public ResponseEntity<byte[]> exportProcurementCsv(
+    @Operation(summary = "Export complete procurement register as CSV for state audits and e-Uparjan reporting using memory-bounded streaming")
+    public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> exportProcurementCsv(
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String mandiId,
             @RequestParam(required = false) String cropId
     ) {
-        List<ProcurementRegisterRowDto> rows = reportService.getProcurementRegister(district, mandiId, cropId);
+        org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
+            reportService.streamProcurementRegisterCsv(district, mandiId, cropId, outputStream);
+        };
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("Token Number,Scheduled Date,Farmer Name,Phone,Masked Aadhaar,District,Mandi,Crop,Booked Qtl,Net Weight Qtl,Moisture %,Foreign Matter %,Payout Rs,Status,DBT Status,DBT Ref,Bank Account,IFSC,Completed At\n");
-
-        for (ProcurementRegisterRowDto r : rows) {
-            sb.append(escapeCsv(r.getTokenNumber())).append(",")
-              .append(escapeCsv(r.getScheduledDate())).append(",")
-              .append(escapeCsv(r.getFarmerName())).append(",")
-              .append(escapeCsv(r.getFarmerPhone())).append(",")
-              .append(escapeCsv(r.getMaskedAadhar())).append(",")
-              .append(escapeCsv(r.getDistrict())).append(",")
-              .append(escapeCsv(r.getMandiName())).append(",")
-              .append(escapeCsv(r.getCropName())).append(",")
-              .append(r.getEstimatedYieldQuintals() != null ? r.getEstimatedYieldQuintals().toString() : "").append(",")
-              .append(r.getNetWeightQuintals() != null ? r.getNetWeightQuintals().toString() : "").append(",")
-              .append(r.getMoisturePercentage() != null ? r.getMoisturePercentage().toString() : "").append(",")
-              .append(r.getForeignMatterPercentage() != null ? r.getForeignMatterPercentage().toString() : "").append(",")
-              .append(r.getTotalPayoutRs() != null ? r.getTotalPayoutRs().toString() : "").append(",")
-              .append(escapeCsv(r.getStatus())).append(",")
-              .append(escapeCsv(r.getPaymentStatus())).append(",")
-              .append(escapeCsv(r.getDbtReferenceNo() != null ? r.getDbtReferenceNo() : "N/A")).append(",")
-              .append(escapeCsv(r.getBankAccountLast4())).append(",")
-              .append(escapeCsv(r.getIfscCode())).append(",")
-              .append(escapeCsv(r.getCompletedAt() != null ? r.getCompletedAt() : "N/A"))
-              .append("\n");
-        }
-
-        byte[] csvBytes = sb.toString().getBytes(StandardCharsets.UTF_8);
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"kisansarthi_procurement_register.csv\"")
                 .contentType(MediaType.parseMediaType("text/csv; charset=UTF-8"))
-                .body(csvBytes);
-    }
-
-    private String escapeCsv(String value) {
-        if (value == null) return "";
-        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
-            return "\"" + value.replace("\"", "\"\"") + "\"";
-        }
-        return value;
+                .body(responseBody);
     }
 }

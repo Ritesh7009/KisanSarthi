@@ -11,6 +11,8 @@ public class PaymentAnalyticsReportDto {
     private BigDecimal totalAmountSettledRs;
     private BigDecimal totalAmountPendingRs;
     private double averageSettlementHours;
+    private long totalDelayedPaymentsCount;
+    private BigDecimal totalDelayedAmountRs;
     private List<PaymentDelayAlertDto> delayedPayments;
 
     public PaymentAnalyticsReportDto() {}
@@ -24,7 +26,8 @@ public class PaymentAnalyticsReportDto {
         private String mandiName;
         private BigDecimal netPayableAmount;
         private String paymentStatus;
-        private String completedAt;
+        private String initiatedAt;
+        private String completedAt; // Kept for backwards-compatibility; populated with initiation/creation timestamp
         private long delayHours;
         private String maskedAccount;
 
@@ -53,6 +56,9 @@ public class PaymentAnalyticsReportDto {
 
         public String getPaymentStatus() { return paymentStatus; }
         public void setPaymentStatus(String paymentStatus) { this.paymentStatus = paymentStatus; }
+
+        public String getInitiatedAt() { return initiatedAt; }
+        public void setInitiatedAt(String initiatedAt) { this.initiatedAt = initiatedAt; }
 
         public String getCompletedAt() { return completedAt; }
         public void setCompletedAt(String completedAt) { this.completedAt = completedAt; }
@@ -86,6 +92,13 @@ public class PaymentAnalyticsReportDto {
     public double getAverageSettlementHours() { return averageSettlementHours; }
     public void setAverageSettlementHours(double averageSettlementHours) { this.averageSettlementHours = averageSettlementHours; }
 
+    public long getTotalDelayedPaymentsCount() { return totalDelayedPaymentsCount; }
+    public void setTotalDelayedPaymentsCount(long totalDelayedPaymentsCount) { this.totalDelayedPaymentsCount = totalDelayedPaymentsCount; }
+
+    public BigDecimal getTotalDelayedAmountRs() { return totalDelayedAmountRs; }
+    public void setTotalDelayedAmountRs(BigDecimal totalDelayedAmountRs) { this.totalDelayedAmountRs = totalDelayedAmountRs; }
+
     public List<PaymentDelayAlertDto> getDelayedPayments() { return delayedPayments; }
     public void setDelayedPayments(List<PaymentDelayAlertDto> delayedPayments) { this.delayedPayments = delayedPayments; }
 }
+

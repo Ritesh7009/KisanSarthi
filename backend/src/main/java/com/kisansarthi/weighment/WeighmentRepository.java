@@ -24,7 +24,8 @@ public interface WeighmentRepository extends JpaRepository<Weighment, UUID> {
            "COALESCE(AVG(w.moisturePct), 0), " +
            "COALESCE(MIN(w.moisturePct), 0), " +
            "COALESCE(MAX(w.moisturePct), 0), " +
-           "COALESCE(AVG(w.foreignMatterPct), 0) " +
+           "COALESCE(AVG(w.foreignMatterPct), 0), " +
+           "COALESCE(SUM(w.netWeightQuintals * w.foreignMatterPct / 100.0), 0) " +
            "FROM Weighment w")
     List<Object[]> getWeighmentSummaryMetrics();
 
