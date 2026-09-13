@@ -1,0 +1,22 @@
+name: Phase 4 Verification
+
+on:
+  push:
+    branches:
+      - phase-4-reporting-complete
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Run backend tests
+        run: mvn -f backend/pom.xml clean test
