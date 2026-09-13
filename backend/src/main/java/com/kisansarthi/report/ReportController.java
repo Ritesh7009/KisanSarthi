@@ -66,6 +66,9 @@ public class ReportController {
     public ResponseEntity<ApiResponse<PaymentAnalyticsReportDto>> getPaymentAnalytics(
             @RequestParam(defaultValue = "24") long delaySlaHours
     ) {
+        if (delaySlaHours < 1 || delaySlaHours > 720) {
+            throw new IllegalArgumentException("delaySlaHours must be between 1 and 720");
+        }
         return ResponseEntity.ok(ApiResponse.ok(reportService.getPaymentAnalytics(delaySlaHours)));
     }
 

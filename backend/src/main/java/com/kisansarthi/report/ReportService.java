@@ -193,8 +193,8 @@ public class ReportService {
             String hindiDistrict = districtMandis.isEmpty() ? district : districtMandis.get(0).getHindiDistrict();
 
             ProcurementTarget target = targetByDistrict.get(district.toLowerCase());
-            double targetQtl = target != null ? target.getTargetQuintals().doubleValue() : 500000.0;
-            double warehouseCapQtl = target != null ? target.getWarehouseCapacityQuintals().doubleValue() : (targetQtl * 1.2);
+            double targetQtl = target != null ? target.getTargetQuintals().doubleValue() : 0.0;
+            double warehouseCapQtl = target != null ? target.getWarehouseCapacityQuintals().doubleValue() : 0.0;
 
             // Completed transactions in this district
             List<Booking> completedDistrictBookings = districtBookings.stream()
@@ -656,6 +656,8 @@ public class ReportService {
         long completedCount = 0;
         long pendingCount = 0;
         long failedCount = 0;
+        BigDecimal settlementHoursSum = BigDecimal.ZERO;
+        long settlementHoursCount = 0;
 
         BigDecimal totalSettledRs = BigDecimal.ZERO;
         BigDecimal totalPendingRs = BigDecimal.ZERO;
@@ -670,6 +672,13 @@ public class ReportService {
             if ("COMPLETED".equalsIgnoreCase(status)) {
                 completedCount++;
                 totalSettledRs = totalSettledRs.add(netAmount);
+                OffsetDateTime settlementStart = p.getInitiatedAt() != null ? p.getInitiatedAt() : p.getCreatedAt();
+                OffsetDateTime settlementEnd = p.getCreditedAt();
+                if (settlementStart != null && settlementEnd != null && !settlementEnd.isBefore(settlementStart)) {
+                    long seconds = Duration.between(settlementStart, settlementEnd).getSeconds();
+                    settlementHoursSum = settlementHoursSum.add(BigDecimal.valueOf(seconds).divide(BigDecimal.valueOf(3600), 4, RoundingMode.HALF_UP));
+                    settlementHoursCount++;
+                }
             } else if ("FAILED".equalsIgnoreCase(status)) {
                 failedCount++;
                 totalPendingRs = totalPendingRs.add(netAmount);
@@ -695,7 +704,7 @@ public class ReportService {
                     alert.setMandiName(p.getMandi().getName());
                     alert.setNetPayableAmount(netAmount);
                     alert.setPaymentStatus(status);
-                    alert.setCompletedAt(p.getCreatedAt().toString());
+                    alert.setCompletedAt(p.getCreditedAt() != null ? p.getCreditedAt().toString() : null);
                     alert.setDelayHours(hours);
                     alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
                     delayed.add(alert);
@@ -710,7 +719,7 @@ public class ReportService {
         dto.setTotalDbtFailed(failedCount);
         dto.setTotalAmountSettledRs(totalSettledRs.setScale(2, RoundingMode.HALF_UP));
         dto.setTotalAmountPendingRs(totalPendingRs.setScale(2, RoundingMode.HALF_UP));
-        dto.setAverageSettlementHours(4.2); // Typical PFMS clearing window
+        dto.setAverageSettlementHours(settlementHoursCount == 0 ? 0.0 : settlementHoursSum.divide(BigDecimal.valueOf(settlementHoursCount), 2, RoundingMode.HALF_UP).doubleValue());
         dto.setDelayedPayments(delayed);
 
         return dto;
@@ -721,6 +730,9 @@ public class ReportService {
     // ==========================================
     @Transactional(readOnly = true)
     public List<TimeSeriesPointDto> getTimeSeries(int days) {
+        if (days < 1 || days > 365) {
+            throw new IllegalArgumentException("days must be between 1 and 365");
+        }
         List<Booking> bookings = bookingRepository.findAll();
         LocalDate today = LocalDate.now(IST_ZONE);
         LocalDate start = today.minusDays(days - 1);

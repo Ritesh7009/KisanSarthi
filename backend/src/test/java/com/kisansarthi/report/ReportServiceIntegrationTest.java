@@ -239,6 +239,13 @@ public class ReportServiceIntegrationTest {
     }
 
     @Test
+    @DisplayName("Verify time-series rejects unreasonable windows")
+    void testTimeSeriesWindowValidation() {
+        assertThrows(IllegalArgumentException.class, () -> reportService.getTimeSeries(0));
+        assertThrows(IllegalArgumentException.class, () -> reportService.getTimeSeries(366));
+    }
+
+    @Test
     @DisplayName("Verify time-series daily aggregation")
     void testTimeSeries() {
         List<TimeSeriesPointDto> series = reportService.getTimeSeries(7);
