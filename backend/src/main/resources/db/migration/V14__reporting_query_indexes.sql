@@ -10,11 +10,8 @@ CREATE INDEX IF NOT EXISTS idx_bookings_farmer_status
 CREATE INDEX IF NOT EXISTS idx_bookings_scheduled_status
     ON bookings(scheduled_date, status);
 
-CREATE INDEX IF NOT EXISTS idx_mandi_slots_mandi_date
-    ON mandi_slots(mandi_id, slot_date);
-
-CREATE INDEX IF NOT EXISTS idx_mandi_slots_date_status
-    ON mandi_slots(slot_date, status);
+CREATE INDEX IF NOT EXISTS idx_mandi_slots_mandi_status
+    ON mandi_slots(mandi_id, status);
 
 CREATE INDEX IF NOT EXISTS idx_queue_events_mandi_created
     ON queue_events(mandi_id, created_at);
