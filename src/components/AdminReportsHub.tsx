@@ -85,6 +85,7 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
   const [qualityReport, setQualityReport] = useState<QualityAndWeighmentReport | null>(null);
   const [paymentReport, setPaymentReport] = useState<PaymentAnalyticsReport | null>(null);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchRegisterData = useCallback(async (page: number, size: number, search?: string) => {
     setIsRegisterLoading(true);
@@ -106,6 +107,7 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
 
   const fetchAllReports = async () => {
     setIsLoading(true);
+    setLoadError(null);
     try {
       const [
         ov,
@@ -117,14 +119,14 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
         pay,
         ts,
       ] = await Promise.all([
-        reportApi.getStatewideOverview().catch(() => null),
-        reportApi.getDistrictStats(selectedDistrict === 'ALL' ? undefined : selectedDistrict).catch(() => []),
-        reportApi.getMandiPerformance(selectedDistrict === 'ALL' ? undefined : selectedDistrict).catch(() => []),
-        reportApi.getBottlenecks().catch(() => []),
-        reportApi.getCropReports().catch(() => []),
-        reportApi.getQualityAndWeighmentReport().catch(() => null),
-        reportApi.getPaymentAnalytics().catch(() => null),
-        reportApi.getTimeSeries(7).catch(() => []),
+        reportApi.getStatewideOverview(),
+        reportApi.getDistrictStats(selectedDistrict === 'ALL' ? undefined : selectedDistrict),
+        reportApi.getMandiPerformance(selectedDistrict === 'ALL' ? undefined : selectedDistrict),
+        reportApi.getBottlenecks(),
+        reportApi.getCropReports(),
+        reportApi.getQualityAndWeighmentReport(),
+        reportApi.getPaymentAnalytics(),
+        reportApi.getTimeSeries(7),
       ]);
 
       if (ov) setOverview(ov);
@@ -139,6 +141,7 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
       await fetchRegisterData(registerPage, registerPageSize, registerSearch);
     } catch (err) {
       console.error('Failed to load reports data', err);
+      setLoadError('Unable to connect to the central reporting service. Please check your network connection and retry.');
     } finally {
       setIsLoading(false);
     }
@@ -157,18 +160,8 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
 
   const uniqueDistricts = Array.from(new Set(mandis.map((m) => m.district))).sort();
 
-  // Filtered register rows based on active page content
+  // Canonical server-side paginated register rows directly from backend API
   const registerRows = paginatedRegister?.content || [];
-  const filteredRegister = registerRows.filter((row) => {
-    const q = registerSearch.toLowerCase();
-    return (
-      !q ||
-      row.tokenNumber.toLowerCase().includes(q) ||
-      row.farmerName.toLowerCase().includes(q) ||
-      row.farmerPhone.toLowerCase().includes(q) ||
-      row.mandiName.toLowerCase().includes(q)
-    );
-  });
 
   const COLORS = ['#1B4332', '#2D6A4F', '#40916C', '#52B788', '#74C69D', '#D4E09B'];
 
@@ -283,6 +276,24 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
       </div>
 
       {/* Bottleneck Alert Banner (if any) */}
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded-2xl p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <h4 className="text-xs font-bold text-red-900 uppercase tracking-wider">
+              Error Loading Report Data
+            </h4>
+            <p className="text-xs text-red-700 mt-0.5">{loadError}</p>
+            <button
+              onClick={fetchAllReports}
+              className="mt-2 px-3 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
       {bottlenecks.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
           <div className="flex items-start gap-3">
@@ -323,23 +334,23 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
             <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs">
               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total Certified Intake</p>
               <p className="text-2xl font-black text-slate-900 font-mono mt-1">
-                {overview?.totalCertifiedQuantityQuintals
-                  ? `${(overview.totalCertifiedQuantityQuintals / 1000).toFixed(1)}k`
-                  : '63.4k'}{' '}
+                {overview?.totalCertifiedQuantityQuintals != null
+                  ? `${overview.totalCertifiedQuantityQuintals.toLocaleString()} `
+                  : '0 '}
                 <span className="text-xs font-sans text-slate-500 font-normal">Quintals</span>
               </p>
               <p className="text-[10px] text-[#2D6A4F] font-bold mt-0.5 flex items-center gap-1">
                 <ArrowUpRight className="w-3 h-3" />
-                88.2% State target achieved
+                Live procurement total
               </p>
             </div>
 
             <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs">
               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">DBT Disbursed</p>
               <p className="text-2xl font-black text-[#1B4332] font-mono mt-1">
-                ₹{overview?.totalDbtDisbursedRs
+                ₹{overview?.totalDbtDisbursedRs != null
                   ? (overview.totalDbtDisbursedRs / 10000000).toFixed(2)
-                  : '16.82'}{' '}
+                  : '0.00'}{' '}
                 <span className="text-xs font-sans text-slate-500 font-normal">Crores</span>
               </p>
               <p className="text-[10px] text-slate-500 mt-0.5">Direct to farmer bank A/C</p>
@@ -348,18 +359,19 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
             <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs">
               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Farmers Benefited</p>
               <p className="text-2xl font-black text-slate-900 font-mono mt-1">
-                {overview?.totalFarmersServed || 164}{' '}
+                {overview?.totalFarmersServed != null ? overview.totalFarmersServed : 0}{' '}
                 <span className="text-xs font-sans text-slate-500 font-normal">Farmers</span>
               </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Across {overview?.totalActiveMandis || 12} active mandis</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">Across {overview?.totalActiveMandis != null ? overview.totalActiveMandis : 0} active mandis</p>
             </div>
 
             <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Avg Processing Turnaround</p>
+              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Waiting / In Queue</p>
               <p className="text-2xl font-black text-[#2D6A4F] font-mono mt-1">
-                18 <span className="text-xs font-sans text-slate-500 font-normal">Mins</span>
+                {overview?.totalWaitingFarmers != null ? overview.totalWaitingFarmers : 0}{' '}
+                <span className="text-xs font-sans text-slate-500 font-normal">Vehicles</span>
               </p>
-              <p className="text-[10px] text-[#2D6A4F] font-bold mt-0.5">SLA: Under 45 minutes</p>
+              <p className="text-[10px] text-[#2D6A4F] font-bold mt-0.5">Active mandi queues</p>
             </div>
           </div>
 
@@ -668,9 +680,11 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
             <div className="p-5 bg-white rounded-3xl border border-slate-200 shadow-xs">
               <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Payment Success Rate</p>
               <p className="text-2xl font-black text-emerald-800 font-mono mt-1">
-                100%
+                {paymentReport.totalDbtCompleted + paymentReport.totalDbtFailed > 0
+                  ? `${((paymentReport.totalDbtCompleted / (paymentReport.totalDbtCompleted + paymentReport.totalDbtFailed)) * 100).toFixed(1)}%`
+                  : '100%'}
               </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">0 Failed Bank Transfers</p>
+              <p className="text-[10px] text-slate-500 mt-0.5">{paymentReport.totalDbtFailed} Failed Bank Transfers</p>
             </div>
           </div>
 
@@ -816,14 +830,14 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRegister.length === 0 ? (
+                {registerRows.length === 0 ? (
                   <tr>
                     <td colSpan={10} className="text-center py-10 text-slate-400 text-xs">
                       {isRegisterLoading ? 'Loading procurement records...' : 'No procurement records match current filters.'}
                     </td>
                   </tr>
                 ) : (
-                  filteredRegister.map((r) => (
+                  registerRows.map((r) => (
                     <tr key={r.bookingId} className="hover:bg-[#F3F6F1]/50 transition-colors">
                       <td className="p-3.5 font-mono font-bold text-[#1B4332]">{r.tokenNumber}</td>
                       <td className="p-3.5 text-slate-600 whitespace-nowrap">{r.scheduledDate}</td>
