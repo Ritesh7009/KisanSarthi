@@ -26,4 +26,13 @@ public interface SlotRepository extends JpaRepository<MandiSlot, String> {
     Optional<MandiSlot> findFirstByMandiIdAndSlotLabel(String mandiId, String slotLabel);
 
     Optional<MandiSlot> findFirstByMandiIdAndStartTimeAndEndTime(String mandiId, String startTime, String endTime);
+
+    @Query("SELECT s.mandiId, " +
+           "COALESCE(SUM(s.maxCapacityQuintals), 0), " +
+           "COALESCE(SUM(s.bookedQuintals), 0), " +
+           "COALESCE(SUM(CASE WHEN s.maxCapacityQuintals > s.bookedQuintals THEN (s.maxCapacityQuintals - s.bookedQuintals) ELSE 0 END), 0) " +
+           "FROM MandiSlot s " +
+           "GROUP BY s.mandiId")
+    List<Object[]> aggregateSlotCapacitiesByMandi();
 }
+

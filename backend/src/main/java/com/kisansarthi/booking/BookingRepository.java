@@ -1,5 +1,7 @@
 package com.kisansarthi.booking;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -78,6 +80,24 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("endDate") LocalDate endDate,
             @Param("completedStatuses") Collection<BookingStatus> completedStatuses);
 
+    @Query(value = "SELECT b FROM Booking b " +
+           "JOIN FETCH b.farmer f " +
+           "JOIN FETCH b.mandi m " +
+           "JOIN FETCH b.crop c " +
+           "WHERE (:district IS NULL OR :district = '' OR LOWER(m.district) = LOWER(:district)) " +
+           "AND (:mandiId IS NULL OR :mandiId = '' OR m.id = :mandiId) " +
+           "AND (:cropId IS NULL OR :cropId = '' OR c.id = :cropId) " +
+           "ORDER BY b.scheduledDate DESC, b.createdAt DESC",
+           countQuery = "SELECT COUNT(b) FROM Booking b " +
+           "WHERE (:district IS NULL OR :district = '' OR LOWER(b.mandi.district) = LOWER(:district)) " +
+           "AND (:mandiId IS NULL OR :mandiId = '' OR b.mandi.id = :mandiId) " +
+           "AND (:cropId IS NULL OR :cropId = '' OR b.crop.id = :cropId)")
+    Page<Booking> findFilteredForRegisterPageable(
+            @Param("district") String district,
+            @Param("mandiId") String mandiId,
+            @Param("cropId") String cropId,
+            Pageable pageable);
+
     @Query("SELECT b FROM Booking b " +
            "JOIN FETCH b.farmer f " +
            "JOIN FETCH b.mandi m " +
@@ -91,4 +111,5 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
             @Param("mandiId") String mandiId,
             @Param("cropId") String cropId);
 }
+
 

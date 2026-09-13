@@ -89,6 +89,18 @@ public class ReportController {
         return ResponseEntity.ok(ApiResponse.ok(reportService.getProcurementRegister(district, mandiId, cropId)));
     }
 
+    @GetMapping("/procurement-register/paginated")
+    @Operation(summary = "Get paginated granular procurement transactions register with filter criteria")
+    public ResponseEntity<ApiResponse<PaginatedProcurementRegisterDto>> getPaginatedProcurementRegister(
+            @RequestParam(required = false) String district,
+            @RequestParam(required = false) String mandiId,
+            @RequestParam(required = false) String cropId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaginatedProcurementRegister(district, mandiId, cropId, page, size)));
+    }
+
     @GetMapping("/export/csv")
     @Operation(summary = "Export complete procurement register as CSV for state audits and e-Uparjan reporting")
     public ResponseEntity<byte[]> exportProcurementCsv(

@@ -249,9 +249,13 @@ public class ReportService {
                     .toList();
         }
 
-        List<MandiSlot> allSlots = slotRepository.findAll();
-        Map<String, List<MandiSlot>> slotsByMandi = allSlots.stream()
-                .collect(Collectors.groupingBy(MandiSlot::getMandiId));
+        // Aggregate slot capacities by mandi using SQL aggregation (removes full slot table load)
+        Map<String, Object[]> slotAggByMandi = new HashMap<>();
+        for (Object[] row : slotRepository.aggregateSlotCapacitiesByMandi()) {
+            if (row[0] != null) {
+                slotAggByMandi.put((String) row[0], row);
+            }
+        }
 
         // Aggregate bookings by mandi: [mandiId, totalBookings, completedCount, sumNetWeight]
         Map<String, Object[]> bookingAggByMandi = new HashMap<>();
@@ -272,17 +276,17 @@ public class ReportService {
         List<MandiPerformanceDto> result = new ArrayList<>();
 
         for (Mandi mandi : mandis) {
-            List<MandiSlot> mSlots = slotsByMandi.getOrDefault(mandi.getId(), Collections.emptyList());
+            Object[] slotAgg = slotAggByMandi.get(mandi.getId());
             Object[] agg = bookingAggByMandi.get(mandi.getId());
 
             long totalBookings = agg != null ? ((Number) agg[1]).longValue() : 0L;
             long completedCount = agg != null ? ((Number) agg[2]).longValue() : 0L;
             BigDecimal certifiedQtl = agg != null ? ((BigDecimal) agg[3]).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-            int remainingCapacity = mSlots.stream()
-                    .mapToInt(s -> Math.max(0, s.getMaxCapacityQuintals() - s.getBookedQuintals()))
-                    .sum();
-            if (mSlots.isEmpty()) {
+            int remainingCapacity;
+            if (slotAgg != null) {
+                remainingCapacity = ((Number) slotAgg[3]).intValue();
+            } else {
                 remainingCapacity = mandi.getDailyCapacityQuintals();
             }
 
@@ -507,24 +511,19 @@ public class ReportService {
         dto.setTotalDockageQuintals(totalDockage);
         dto.setDockagePercentage(avgFm.doubleValue());
 
-        // Moisture FAQ threshold check against crop limits
-        List<Crop> crops = cropRepository.findAll();
-        Map<String, BigDecimal> moistureLimitByCrop = crops.stream()
-                .collect(Collectors.toMap(Crop::getId, Crop::getMoistureLimitPct));
-
-        List<Object[]> moisturePairs = weighmentRepository.findMoistureAndCropPairs();
+        // Moisture FAQ threshold check directly aggregated in SQL (no moisture row loops or full table scans)
+        List<Object[]> moistureStats = weighmentRepository.getMoistureComplianceStats();
+        long totalSampled = 0;
         long aboveLimitCount = 0;
-        for (Object[] pair : moisturePairs) {
-            BigDecimal mPct = (BigDecimal) pair[0];
-            String cropId = (String) pair[1];
-            BigDecimal limit = cropId != null ? moistureLimitByCrop.getOrDefault(cropId, new BigDecimal("12.0")) : new BigDecimal("12.0");
-            if (mPct != null && mPct.compareTo(limit) > 0) {
-                aboveLimitCount++;
-            }
+        long withinLimitCount = 0;
+
+        if (!moistureStats.isEmpty() && moistureStats.get(0) != null) {
+            Object[] mRow = moistureStats.get(0);
+            totalSampled = mRow[0] != null ? ((Number) mRow[0]).longValue() : 0L;
+            aboveLimitCount = mRow[1] != null ? ((Number) mRow[1]).longValue() : 0L;
+            withinLimitCount = mRow[2] != null ? ((Number) mRow[2]).longValue() : 0L;
         }
 
-        long totalSampled = moisturePairs.size();
-        long withinLimitCount = totalSampled - aboveLimitCount;
         double pctAbove = totalSampled > 0 ? (aboveLimitCount * 100.0) / totalSampled : 0.0;
 
         dto.setSamplesWithinFaqThreshold(withinLimitCount);
@@ -552,64 +551,92 @@ public class ReportService {
     }
 
     // ==========================================
-    // 7. DBT & PAYMENT ANALYTICS WITH DELAY DETECTION
+    // 7. DBT & PAYMENT ANALYTICS WITH REAL SETTLEMENT TIME CALCULATION
     // ==========================================
     @Transactional(readOnly = true)
     public PaymentAnalyticsReportDto getPaymentAnalytics(long delaySlaHours) {
         BigDecimal totalSettledRs = paymentRepository.sumSettledPayments();
 
-        List<Payment> activePayments = paymentRepository.findNonCompletedPaymentsWithDetails();
-
+        // 1. Aggregate status counts and amounts directly in SQL
+        long completedCount = 0;
         long initiatedCount = 0;
         long pendingCount = 0;
         long failedCount = 0;
         BigDecimal totalPendingRs = BigDecimal.ZERO;
 
-        List<PaymentAnalyticsReportDto.PaymentDelayAlertDto> delayed = new ArrayList<>();
-        OffsetDateTime now = OffsetDateTime.now();
+        for (Object[] row : paymentRepository.aggregatePaymentCountsAndAmountsByStatus()) {
+            if (row[0] != null) {
+                String status = row[0].toString().toUpperCase();
+                long count = ((Number) row[1]).longValue();
+                BigDecimal amount = (BigDecimal) row[2];
 
-        for (Payment p : activePayments) {
-            String status = p.getPaymentStatus();
-            BigDecimal netAmount = p.getNetPayableAmount() != null ? p.getNetPayableAmount() : BigDecimal.ZERO;
-
-            if ("FAILED".equalsIgnoreCase(status)) {
-                failedCount++;
-                totalPendingRs = totalPendingRs.add(netAmount);
-            } else if ("INITIATED".equalsIgnoreCase(status) || "PROCESSING".equalsIgnoreCase(status)) {
-                initiatedCount++;
-                totalPendingRs = totalPendingRs.add(netAmount);
-            } else {
-                pendingCount++;
-                totalPendingRs = totalPendingRs.add(netAmount);
-            }
-
-            // Delay Detection: check age since initiation or creation
-            OffsetDateTime referenceTime = p.getInitiatedAt() != null ? p.getInitiatedAt() : p.getCreatedAt();
-            long hours = Duration.between(referenceTime, now).toHours();
-            if (hours >= delaySlaHours) {
-                PaymentAnalyticsReportDto.PaymentDelayAlertDto alert = new PaymentAnalyticsReportDto.PaymentDelayAlertDto();
-                if (p.getBooking() != null) {
-                    alert.setBookingId(p.getBooking().getId().toString());
-                    alert.setTokenNumber(p.getBooking().getTokenNumber());
+                if ("COMPLETED".equals(status)) {
+                    completedCount += count;
+                } else if ("FAILED".equals(status)) {
+                    failedCount += count;
+                    totalPendingRs = totalPendingRs.add(amount);
+                } else if ("INITIATED".equals(status) || "PROCESSING".equals(status)) {
+                    initiatedCount += count;
+                    totalPendingRs = totalPendingRs.add(amount);
+                } else {
+                    pendingCount += count;
+                    totalPendingRs = totalPendingRs.add(amount);
                 }
-                if (p.getFarmer() != null) {
-                    alert.setFarmerReference(p.getFarmer().getName() + " (" + p.getFarmer().getKisanId() + ")");
-                    alert.setMaskedAadhar(p.getFarmer().getMaskedAadhar());
-                }
-                if (p.getMandi() != null) {
-                    alert.setMandiId(p.getMandi().getId());
-                    alert.setMandiName(p.getMandi().getName());
-                }
-                alert.setNetPayableAmount(netAmount);
-                alert.setPaymentStatus(status);
-                alert.setCompletedAt(p.getCreatedAt().toString());
-                alert.setDelayHours(hours);
-                alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
-                delayed.add(alert);
             }
         }
 
-        long completedCount = paymentRepository.count() - activePayments.size();
+        // 2. Fetch only genuine delayed non-completed payments based on SLA cutoff
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime cutoffTime = now.minusHours(delaySlaHours);
+        List<Payment> delayedPayments = paymentRepository.findDelayedPaymentsWithDetails(cutoffTime);
+
+        List<PaymentAnalyticsReportDto.PaymentDelayAlertDto> delayed = new ArrayList<>();
+        for (Payment p : delayedPayments) {
+            String status = p.getPaymentStatus();
+            BigDecimal netAmount = p.getNetPayableAmount() != null ? p.getNetPayableAmount() : BigDecimal.ZERO;
+            OffsetDateTime referenceTime = p.getInitiatedAt() != null ? p.getInitiatedAt() : p.getCreatedAt();
+            long hours = Duration.between(referenceTime, now).toHours();
+
+            PaymentAnalyticsReportDto.PaymentDelayAlertDto alert = new PaymentAnalyticsReportDto.PaymentDelayAlertDto();
+            if (p.getBooking() != null) {
+                alert.setBookingId(p.getBooking().getId().toString());
+                alert.setTokenNumber(p.getBooking().getTokenNumber());
+            }
+            if (p.getFarmer() != null) {
+                alert.setFarmerReference(p.getFarmer().getName() + " (" + p.getFarmer().getKisanId() + ")");
+                alert.setMaskedAadhar(p.getFarmer().getMaskedAadhar());
+            }
+            if (p.getMandi() != null) {
+                alert.setMandiId(p.getMandi().getId());
+                alert.setMandiName(p.getMandi().getName());
+            }
+            alert.setNetPayableAmount(netAmount);
+            alert.setPaymentStatus(status);
+            alert.setCompletedAt(p.getCreatedAt().toString());
+            alert.setDelayHours(hours);
+            alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
+            delayed.add(alert);
+        }
+
+        // 3. Real settlement hours calculation from actual timestamps
+        List<Object[]> timestamps = paymentRepository.findCompletedPaymentSettlementTimestamps();
+        double avgSettlementHours = 0.0;
+        if (!timestamps.isEmpty()) {
+            long totalMinutes = 0;
+            long sampleCount = 0;
+            for (Object[] pair : timestamps) {
+                if (pair[0] instanceof OffsetDateTime init && pair[1] instanceof OffsetDateTime cred) {
+                    long minutes = Duration.between(init, cred).toMinutes();
+                    if (minutes >= 0) {
+                        totalMinutes += minutes;
+                        sampleCount++;
+                    }
+                }
+            }
+            if (sampleCount > 0) {
+                avgSettlementHours = Math.round((totalMinutes / 60.0 / sampleCount) * 10.0) / 10.0;
+            }
+        }
 
         PaymentAnalyticsReportDto dto = new PaymentAnalyticsReportDto();
         dto.setTotalDbtInitiated(initiatedCount + completedCount);
@@ -618,7 +645,7 @@ public class ReportService {
         dto.setTotalDbtFailed(failedCount);
         dto.setTotalAmountSettledRs(totalSettledRs.setScale(2, RoundingMode.HALF_UP));
         dto.setTotalAmountPendingRs(totalPendingRs.setScale(2, RoundingMode.HALF_UP));
-        dto.setAverageSettlementHours(4.2); // Typical PFMS clearing window
+        dto.setAverageSettlementHours(avgSettlementHours);
         dto.setDelayedPayments(delayed);
 
         return dto;
@@ -661,18 +688,50 @@ public class ReportService {
     }
 
     // ==========================================
-    // 9. PROCUREMENT REGISTER (STREAMLINED FILTER QUERY)
+    // 9. PROCUREMENT REGISTER (OPTIMIZED JOIN QUERIES & PAGINATION)
     // ==========================================
     @Transactional(readOnly = true)
     public List<ProcurementRegisterRowDto> getProcurementRegister(String district, String mandiId, String cropId) {
         List<Booking> bookings = bookingRepository.findFilteredForRegister(district, mandiId, cropId);
-        List<Weighment> weighments = weighmentRepository.findAll();
-        List<Payment> payments = paymentRepository.findAll();
+        return mapBookingsToRegisterRows(bookings);
+    }
 
-        Map<UUID, Weighment> weighmentByBooking = weighments.stream()
+    @Transactional(readOnly = true)
+    public PaginatedProcurementRegisterDto getPaginatedProcurementRegister(
+            String district, String mandiId, String cropId, int page, int size
+    ) {
+        int boundedSize = Math.max(1, Math.min(size, 200)); // Cap max page size to 200
+        int boundedPage = Math.max(0, page);
+        org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(boundedPage, boundedSize);
+
+        org.springframework.data.domain.Page<Booking> bookingPage = bookingRepository.findFilteredForRegisterPageable(
+                district, mandiId, cropId, pageRequest
+        );
+
+        List<ProcurementRegisterRowDto> content = mapBookingsToRegisterRows(bookingPage.getContent());
+
+        return new PaginatedProcurementRegisterDto(
+                content,
+                bookingPage.getNumber(),
+                bookingPage.getSize(),
+                bookingPage.getTotalElements(),
+                bookingPage.getTotalPages(),
+                bookingPage.isLast()
+        );
+    }
+
+    private List<ProcurementRegisterRowDto> mapBookingsToRegisterRows(List<Booking> bookings) {
+        if (bookings.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<UUID> bookingIds = bookings.stream().map(Booking::getId).toList();
+
+        // Fetch weighments and payments ONLY for the filtered booking IDs (eliminates unbounded findAll)
+        Map<UUID, Weighment> weighmentByBooking = weighmentRepository.findByBookingIdIn(bookingIds).stream()
                 .collect(Collectors.toMap(w -> w.getBooking().getId(), w -> w, (a, b) -> a));
 
-        Map<UUID, Payment> paymentByBooking = payments.stream()
+        Map<UUID, Payment> paymentByBooking = paymentRepository.findByBookingIdIn(bookingIds).stream()
                 .collect(Collectors.toMap(p -> p.getBooking().getId(), p -> p, (a, b) -> a));
 
         return bookings.stream()

@@ -129,3 +129,13 @@ export interface ProcurementRegisterRow {
   ifscCode: string;
   completedAt?: string;
 }
+
+export interface PaginatedProcurementRegister {
+  content: ProcurementRegisterRow[];
+  page: number;
+  size: number;
+  totalElements: number;
+  totalPages: number;
+  last: boolean;
+}
+

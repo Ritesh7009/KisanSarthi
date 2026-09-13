@@ -580,6 +580,7 @@ import type {
   PaymentAnalyticsReport,
   TimeSeriesPoint,
   ProcurementRegisterRow,
+  PaginatedProcurementRegister,
 } from '../types/reportTypes';
 
 export const reportApi = {
@@ -633,6 +634,26 @@ export const reportApi = {
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     const res = await request<{ data: ProcurementRegisterRow[] } | ProcurementRegisterRow[]>(`/api/v1/reports/procurement-register${qs}`);
     return Array.isArray(res) ? res : (res as any).data || [];
+  },
+
+  async getPaginatedProcurementRegister(params?: {
+    district?: string;
+    mandiId?: string;
+    cropId?: string;
+    page?: number;
+    size?: number;
+  }): Promise<PaginatedProcurementRegister> {
+    const sp = new URLSearchParams();
+    if (params?.district) sp.append('district', params.district);
+    if (params?.mandiId) sp.append('mandiId', params.mandiId);
+    if (params?.cropId) sp.append('cropId', params.cropId);
+    if (params?.page !== undefined) sp.append('page', params.page.toString());
+    if (params?.size !== undefined) sp.append('size', params.size.toString());
+    const qs = sp.toString() ? `?${sp.toString()}` : '';
+    const res = await request<{ data: PaginatedProcurementRegister } | PaginatedProcurementRegister>(
+      `/api/v1/reports/procurement-register/paginated${qs}`
+    );
+    return (res as any)?.data || res;
   },
 
   getExportCsvUrl(): string {
