@@ -630,8 +630,8 @@ public class ReportService {
             }
             alert.setNetPayableAmount(netAmount);
             alert.setPaymentStatus(status);
-            alert.setInitiatedAt(referenceTime.toString());
-            alert.setCompletedAt(referenceTime.toString()); // Preserved for backwards compatibility
+            alert.setInitiatedAt(referenceTime != null ? referenceTime.toString() : null);
+            alert.setCompletedAt(p.getCreditedAt() != null ? p.getCreditedAt().toString() : null);
             alert.setDelayHours(hours);
             alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
             delayed.add(alert);

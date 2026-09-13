@@ -27,7 +27,7 @@ public class PaymentAnalyticsReportDto {
         private BigDecimal netPayableAmount;
         private String paymentStatus;
         private String initiatedAt;
-        private String completedAt; // Kept for backwards-compatibility; populated with initiation/creation timestamp
+        private String completedAt; // Actual completion/credit timestamp; null if incomplete/pending
         private long delayHours;
         private String maskedAccount;
 

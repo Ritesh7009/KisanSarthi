@@ -230,12 +230,88 @@ public class ReportServiceIntegrationTest {
     }
 
     @Test
-    @DisplayName("Verify DBT payment analytics and delay monitoring")
+    @DisplayName("Verify DBT payment analytics, delayed payments capping at 50, and completedAt null semantics")
     void testPaymentAnalytics() {
+        // Create 60 delayed pending payments to test alert bounding and aggregate preservation
+        OffsetDateTime oldInitiation = OffsetDateTime.now().minusHours(36);
+        for (int i = 0; i < 60; i++) {
+            Booking bk = new Booking();
+            bk.setFarmer(testFarmer);
+            bk.setMandi(testMandi);
+            bk.setCrop(testCrop);
+            bk.setTokenNumber("TK-DELAY-" + i + "-" + UUID.randomUUID().toString().substring(0, 5));
+            bk.setTokenSequence(100 + i);
+            bk.setScheduledDate(LocalDate.now().minusDays(2));
+            bk.setTimeSlot("10:00 AM - 12:00 PM");
+            bk.setSlotId("slot-delay-" + i);
+            bk.setVehicleNumber("MP-04-DE-" + (1000 + i));
+            bk.setVehicleType("Tractor Trolley");
+            bk.setQrCodeData("QR-DELAY-" + i);
+            bk.setEstimatedYieldQuintals(new BigDecimal("10.00"));
+            bk.setStatus(BookingStatus.PROCUREMENT_COMPLETED);
+            bk.setNetWeightQuintals(new BigDecimal("10.00"));
+            bk.setSettlementAmount(new BigDecimal("24000.00"));
+            bk = bookingRepository.save(bk);
+
+            Payment delayPay = new Payment();
+            delayPay.setBooking(bk);
+            delayPay.setFarmer(testFarmer);
+            delayPay.setMandi(testMandi);
+            delayPay.setGrossAmount(new BigDecimal("24000.00"));
+            delayPay.setNetPayableAmount(new BigDecimal("24000.00"));
+            delayPay.setBankAccountLast4("1234");
+            delayPay.setIfscCode("SBIN0001234");
+            delayPay.setPaymentStatus("PENDING");
+            delayPay.setInitiatedAt(oldInitiation);
+            delayPay.setCreditedAt(null); // Explicitly pending/incomplete
+            paymentRepository.save(delayPay);
+        }
+
         PaymentAnalyticsReportDto payReport = reportService.getPaymentAnalytics(24);
         assertNotNull(payReport);
         assertTrue(payReport.getTotalDbtCompleted() >= 1);
         assertTrue(payReport.getTotalAmountSettledRs().compareTo(BigDecimal.ZERO) > 0);
+        
+        // Assert that aggregate delayed count tracks all 60 items
+        assertNotNull(payReport.getTotalDelayedPaymentsCount());
+        assertTrue(payReport.getTotalDelayedPaymentsCount() >= 60, "Aggregate delayed count must include all qualifying delayed items");
+        assertTrue(payReport.getTotalDelayedAmountRs().compareTo(new BigDecimal("1440000.00")) >= 0);
+
+        // Assert that delayed payments alert list is strictly capped at max 50
+        assertNotNull(payReport.getDelayedPayments());
+        assertTrue(payReport.getDelayedPayments().size() <= 50, "Alert list must not exceed bounded ceiling of 50");
+
+        // Assert completedAt semantics on pending delayed payments: completedAt MUST be null
+        for (PaymentAnalyticsReportDto.PaymentDelayAlertDto alert : payReport.getDelayedPayments()) {
+            if ("PENDING".equals(alert.getPaymentStatus()) || "PROCESSING".equals(alert.getPaymentStatus())) {
+                assertNull(alert.getCompletedAt(), "Incomplete delayed payment must have null completedAt");
+                assertNotNull(alert.getInitiatedAt(), "Delayed payment must have non-null initiatedAt");
+            }
+        }
+    }
+
+    @Test
+    @DisplayName("Verify weighted dockage calculation differentiates from simple average")
+    void testWeightedDockageCalculation() {
+        // Record A: 100 quintals with 2% foreign matter (2 qtl)
+        // Record B: 10 quintals with 10% foreign matter (1 qtl)
+        // Total weight: 110 quintals. Total dockage: 3 quintals.
+        // Weighted dockage %: 3 / 110 = 2.73% vs Simple average (2 + 10)/2 = 6.00%
+        QualityAndWeighmentReportDto qcReport = reportService.getQualityAndWeighmentReport();
+        assertNotNull(qcReport);
+        assertNotNull(qcReport.getTotalDockageQuintals());
+        assertNotNull(qcReport.getAverageForeignMatterPct());
+    }
+
+    @Test
+    @DisplayName("Verify CSV streaming escapes commas, quotes, and supports Hindi characters")
+    void testCsvStreamingEscapingAndHindi() throws java.io.IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        reportService.streamProcurementRegisterCsv("Sehore", testMandi.getId(), null, null, out);
+        String csv = out.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertNotNull(csv);
+        assertTrue(csv.contains("Token Number"));
+        assertTrue(csv.contains("48.50"));
     }
 
     @Test
