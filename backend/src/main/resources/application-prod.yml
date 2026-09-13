@@ -35,3 +35,9 @@ logging:
     root: WARN
     com.kisansarthi: INFO
     org.springframework.security: WARN
+
+# Production Security Requirements: JWT_SECRET must be supplied via environment
+kisansarthi:
+  jwt:
+    secret: ${JWT_SECRET}
+

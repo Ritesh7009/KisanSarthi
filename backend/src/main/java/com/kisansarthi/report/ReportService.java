@@ -39,6 +39,15 @@ public class ReportService {
 
     private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
 
+    private static final List<BookingStatus> COMPLETED_STATUSES = List.of(
+            BookingStatus.PROCUREMENT_COMPLETED,
+            BookingStatus.PAYMENT_PENDING,
+            BookingStatus.PAYMENT_INITIATED,
+            BookingStatus.PAYMENT_PROCESSING,
+            BookingStatus.PAYMENT_CREDITED,
+            BookingStatus.COMPLETED
+    );
+
     public ReportService(
             MandiRepository mandiRepository,
             BookingRepository bookingRepository,
@@ -60,74 +69,39 @@ public class ReportService {
     }
 
     // ==========================================
-    // 1. STATEWIDE OVERVIEW
+    // 1. STATEWIDE OVERVIEW (DATABASE AGGREGATED)
     // ==========================================
     @Transactional(readOnly = true)
     public StatewideOverviewDto getStatewideOverview() {
-        List<Booking> allBookings = bookingRepository.findAll();
-        List<Payment> allPayments = paymentRepository.findAll();
+        long totalBookings = bookingRepository.count();
+        long totalCompletedProcurements = bookingRepository.countByStatusIn(COMPLETED_STATUSES);
+        BigDecimal totalCertifiedQuantity = bookingRepository.sumNetWeightByStatusIn(COMPLETED_STATUSES).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalProcurementValue = bookingRepository.sumSettlementAmountByStatusIn(COMPLETED_STATUSES).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalDbtDisbursed = paymentRepository.sumSettledPayments().setScale(2, RoundingMode.HALF_UP);
+        long totalFarmersServed = bookingRepository.countDistinctFarmersByStatusIn(COMPLETED_STATUSES);
+
         List<Mandi> allMandis = mandiRepository.findAll();
-
-        long totalBookings = allBookings.size();
-        
-        // Only count physically completed procurements
-        List<Booking> completedBookings = allBookings.stream()
-                .filter(b -> b.getStatus() == BookingStatus.PROCUREMENT_COMPLETED
-                        || b.getStatus() == BookingStatus.PAYMENT_PENDING
-                        || b.getStatus() == BookingStatus.PAYMENT_INITIATED
-                        || b.getStatus() == BookingStatus.PAYMENT_PROCESSING
-                        || b.getStatus() == BookingStatus.PAYMENT_CREDITED
-                        || b.getStatus() == BookingStatus.COMPLETED)
-                .toList();
-
-        long totalCompletedProcurements = completedBookings.size();
-
-        // Actual certified net quantity from completed bookings
-        BigDecimal totalCertifiedQuantity = completedBookings.stream()
-                .map(Booking::getNetWeightQuintals)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        // Procurement value: settlement amounts from completed bookings
-        BigDecimal totalProcurementValue = completedBookings.stream()
-                .map(Booking::getSettlementAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        // DBT amount actually settled (COMPLETED in payment record)
-        BigDecimal totalDbtDisbursed = allPayments.stream()
-                .filter(p -> "COMPLETED".equalsIgnoreCase(p.getPaymentStatus()))
-                .map(Payment::getNetPayableAmount)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
-        // Distinct farmers served
-        long totalFarmersServed = completedBookings.stream()
-                .map(b -> b.getFarmer().getId())
-                .distinct()
-                .count();
-
-        // Active Mandis (gateStatus OPEN or operating)
         long totalActiveMandis = allMandis.stream()
                 .filter(m -> "OPEN".equalsIgnoreCase(m.getGateStatus()))
                 .count();
 
-        // Waiting farmers in queue (GATE_CALLED, GATE_ENTERED, WEIGHING, QUALITY_CHECK)
-        long totalWaitingFarmers = allBookings.stream()
-                .filter(b -> b.getStatus() == BookingStatus.GATE_CALLED
-                        || b.getStatus() == BookingStatus.GATE_ENTERED
-                        || b.getStatus() == BookingStatus.WEIGHING
-                        || b.getStatus() == BookingStatus.WEIGHMENT_STAGE_1
-                        || b.getStatus() == BookingStatus.QUALITY_CHECK
-                        || b.getStatus() == BookingStatus.WEIGHMENT_STAGE_2)
-                .count();
+        List<BookingStatus> queueStatuses = List.of(
+                BookingStatus.GATE_CALLED,
+                BookingStatus.GATE_ENTERED,
+                BookingStatus.WEIGHING,
+                BookingStatus.WEIGHMENT_STAGE_1,
+                BookingStatus.QUALITY_CHECK,
+                BookingStatus.WEIGHMENT_STAGE_2
+        );
+        long totalWaitingFarmers = bookingRepository.countByStatusIn(queueStatuses);
 
-        // Status breakdown count
-        Map<String, Long> statusBreakdown = allBookings.stream()
-                .collect(Collectors.groupingBy(b -> b.getStatus().name(), Collectors.counting()));
+        Map<String, Long> statusBreakdown = new HashMap<>();
+        List<Object[]> statusCounts = bookingRepository.countGroupedByStatus();
+        for (Object[] row : statusCounts) {
+            if (row[0] != null && row[1] != null) {
+                statusBreakdown.put(row[0].toString(), ((Number) row[1]).longValue());
+            }
+        }
 
         return new StatewideOverviewDto(
                 totalBookings,
@@ -143,29 +117,16 @@ public class ReportService {
     }
 
     // ==========================================
-    // 2. DISTRICT-WISE ANALYTICS
+    // 2. DISTRICT-WISE ANALYTICS (DATABASE AGGREGATED)
     // ==========================================
     @Transactional(readOnly = true)
     public DistrictStatsReportDto getDistrictStats() {
         List<Mandi> allMandis = mandiRepository.findAll();
-        List<Booking> allBookings = bookingRepository.findAll();
         List<ProcurementTarget> targets = targetRepository.findAll();
-        List<Farmer> allFarmers = farmerRepository.findAll();
-        List<Payment> allPayments = paymentRepository.findAll();
 
-        // Group mandis by district
         Map<String, List<Mandi>> mandisByDistrict = allMandis.stream()
                 .collect(Collectors.groupingBy(Mandi::getDistrict));
 
-        // Group bookings by mandi -> district
-        Map<String, List<Booking>> bookingsByDistrict = allBookings.stream()
-                .collect(Collectors.groupingBy(b -> b.getMandi().getDistrict()));
-
-        // Group farmers by district
-        Map<String, Long> farmersByDistrict = allFarmers.stream()
-                .collect(Collectors.groupingBy(Farmer::getDistrict, Collectors.counting()));
-
-        // Group targets by district
         Map<String, ProcurementTarget> targetByDistrict = targets.stream()
                 .collect(Collectors.toMap(
                         t -> t.getDistrict().toLowerCase(),
@@ -173,17 +134,46 @@ public class ReportService {
                         (existing, replacement) -> existing
                 ));
 
-        List<DistrictProcurementStatDto> dtoList = new ArrayList<>();
+        Map<String, Long> farmersByDistrict = new HashMap<>();
+        for (Object[] row : farmerRepository.countFarmersByDistrict()) {
+            if (row[0] != null && row[1] != null) {
+                farmersByDistrict.put((String) row[0], ((Number) row[1]).longValue());
+            }
+        }
 
-        // Ensure all configured districts with mandis or targets are present
+        // Aggregate bookings grouped by district in SQL
+        // row: [district, totalBookings, completedBookings, sumNetWeight, sumSettlement, distinctFarmers]
+        Map<String, Object[]> bookingAggByDistrict = new HashMap<>();
+        for (Object[] row : bookingRepository.aggregateProcurementByDistrict(COMPLETED_STATUSES)) {
+            if (row[0] != null) {
+                bookingAggByDistrict.put((String) row[0], row);
+            }
+        }
+
+        // Aggregate today's booked yields by district in SQL
+        Map<String, BigDecimal> bookedTodayByDistrict = new HashMap<>();
+        for (Object[] row : bookingRepository.sumEstimatedYieldTodayByDistrict(LocalDate.now(IST_ZONE))) {
+            if (row[0] != null && row[1] != null) {
+                bookedTodayByDistrict.put((String) row[0], (BigDecimal) row[1]);
+            }
+        }
+
+        // Aggregate settled payments by district in SQL
+        Map<String, BigDecimal> settledPaymentsByDistrict = new HashMap<>();
+        for (Object[] row : paymentRepository.sumSettledPaymentsByDistrict()) {
+            if (row[0] != null && row[1] != null) {
+                settledPaymentsByDistrict.put((String) row[0], (BigDecimal) row[1]);
+            }
+        }
+
         Set<String> districtNames = new LinkedHashSet<>();
         mandisByDistrict.keySet().forEach(districtNames::add);
         targets.forEach(t -> districtNames.add(t.getDistrict()));
 
+        List<DistrictProcurementStatDto> dtoList = new ArrayList<>();
+
         for (String district : districtNames) {
             List<Mandi> districtMandis = mandisByDistrict.getOrDefault(district, Collections.emptyList());
-            List<Booking> districtBookings = bookingsByDistrict.getOrDefault(district, Collections.emptyList());
-
             int activeMandis = (int) districtMandis.stream().filter(m -> "OPEN".equalsIgnoreCase(m.getGateStatus())).count();
             if (activeMandis == 0 && !districtMandis.isEmpty()) {
                 activeMandis = districtMandis.size();
@@ -196,51 +186,21 @@ public class ReportService {
             double targetQtl = target != null ? target.getTargetQuintals().doubleValue() : 500000.0;
             double warehouseCapQtl = target != null ? target.getWarehouseCapacityQuintals().doubleValue() : (targetQtl * 1.2);
 
-            // Completed transactions in this district
-            List<Booking> completedDistrictBookings = districtBookings.stream()
-                    .filter(b -> b.getStatus() == BookingStatus.PROCUREMENT_COMPLETED
-                            || b.getStatus() == BookingStatus.PAYMENT_PENDING
-                            || b.getStatus() == BookingStatus.PAYMENT_INITIATED
-                            || b.getStatus() == BookingStatus.PAYMENT_PROCESSING
-                            || b.getStatus() == BookingStatus.PAYMENT_CREDITED
-                            || b.getStatus() == BookingStatus.COMPLETED)
-                    .toList();
-
-            double actualProcuredQtl = completedDistrictBookings.stream()
-                    .map(Booking::getNetWeightQuintals)
-                    .filter(Objects::nonNull)
-                    .mapToDouble(BigDecimal::doubleValue)
-                    .sum();
-
-            // Total payout / procurement value for completed bookings
-            double totalPayoutRs = completedDistrictBookings.stream()
-                    .map(Booking::getSettlementAmount)
-                    .filter(Objects::nonNull)
-                    .mapToDouble(BigDecimal::doubleValue)
-                    .sum();
+            Object[] agg = bookingAggByDistrict.get(district);
+            long totalBookings = agg != null ? ((Number) agg[1]).longValue() : 0L;
+            int completedCount = agg != null ? ((Number) agg[2]).intValue() : 0;
+            double actualProcuredQtl = agg != null ? ((BigDecimal) agg[3]).doubleValue() : 0.0;
+            double totalPayoutRs = agg != null ? ((BigDecimal) agg[4]).doubleValue() : 0.0;
+            int farmersServed = agg != null ? ((Number) agg[5]).intValue() : 0;
+            int pendingCount = (int) (totalBookings - completedCount);
 
             double totalPayoutLakhs = totalPayoutRs / 100000.0;
 
-            // DBT settled in this district
-            Set<UUID> districtBookingIds = districtBookings.stream().map(Booking::getId).collect(Collectors.toSet());
-            double dbtSettledRs = allPayments.stream()
-                    .filter(p -> districtBookingIds.contains(p.getBooking().getId()) && "COMPLETED".equalsIgnoreCase(p.getPaymentStatus()))
-                    .map(Payment::getNetPayableAmount)
-                    .filter(Objects::nonNull)
-                    .mapToDouble(BigDecimal::doubleValue)
-                    .sum();
-            double dbtDisbursedCrores = dbtSettledRs / 10000000.0;
+            BigDecimal dbtSettled = settledPaymentsByDistrict.getOrDefault(district, BigDecimal.ZERO);
+            double dbtDisbursedCrores = dbtSettled.doubleValue() / 10000000.0;
 
-            int farmersServed = (int) completedDistrictBookings.stream().map(b -> b.getFarmer().getId()).distinct().count();
-            int completedCount = completedDistrictBookings.size();
-            int pendingCount = districtBookings.size() - completedCount;
-
-            // Slots & queue
             int totalSlotsToday = districtMandis.stream().mapToInt(Mandi::getDailyCapacityQuintals).sum();
-            int bookedSlotsToday = districtBookings.stream()
-                    .filter(b -> b.getScheduledDate().equals(LocalDate.now(IST_ZONE)))
-                    .mapToInt(b -> b.getEstimatedYieldQuintals().intValue())
-                    .sum();
+            int bookedSlotsToday = bookedTodayByDistrict.getOrDefault(district, BigDecimal.ZERO).intValue();
 
             double achievementPct = targetQtl > 0 ? (actualProcuredQtl / targetQtl) * 100.0 : 0.0;
             String status = achievementPct > 85.0 ? "HIGH_VOLUME" : (pendingCount > 20 ? "CONGESTED" : "NORMAL");
@@ -272,8 +232,8 @@ public class ReportService {
         return new DistrictStatsReportDto(
                 dtoList,
                 allMandis.size(),
-                allBookings.size(),
-                allFarmers.size()
+                (int) bookingRepository.count(),
+                (int) farmerRepository.count()
         );
     }
 
@@ -289,44 +249,35 @@ public class ReportService {
                     .toList();
         }
 
-        List<Booking> allBookings = bookingRepository.findAll();
         List<MandiSlot> allSlots = slotRepository.findAll();
-        List<Payment> allPayments = paymentRepository.findAll();
-
-        Map<String, List<Booking>> bookingsByMandi = allBookings.stream()
-                .collect(Collectors.groupingBy(b -> b.getMandi().getId()));
-
         Map<String, List<MandiSlot>> slotsByMandi = allSlots.stream()
                 .collect(Collectors.groupingBy(MandiSlot::getMandiId));
 
-        Map<String, List<Payment>> paymentsByMandi = allPayments.stream()
-                .collect(Collectors.groupingBy(p -> p.getMandi().getId()));
+        // Aggregate bookings by mandi: [mandiId, totalBookings, completedCount, sumNetWeight]
+        Map<String, Object[]> bookingAggByMandi = new HashMap<>();
+        for (Object[] row : bookingRepository.aggregateProcurementByMandi(COMPLETED_STATUSES)) {
+            if (row[0] != null) {
+                bookingAggByMandi.put((String) row[0], row);
+            }
+        }
+
+        // Aggregate settled payments by mandi
+        Map<String, BigDecimal> dbtByMandi = new HashMap<>();
+        for (Object[] row : paymentRepository.sumSettledPaymentsByMandi()) {
+            if (row[0] != null && row[1] != null) {
+                dbtByMandi.put((String) row[0], (BigDecimal) row[1]);
+            }
+        }
 
         List<MandiPerformanceDto> result = new ArrayList<>();
 
         for (Mandi mandi : mandis) {
-            List<Booking> mBookings = bookingsByMandi.getOrDefault(mandi.getId(), Collections.emptyList());
             List<MandiSlot> mSlots = slotsByMandi.getOrDefault(mandi.getId(), Collections.emptyList());
-            List<Payment> mPayments = paymentsByMandi.getOrDefault(mandi.getId(), Collections.emptyList());
+            Object[] agg = bookingAggByMandi.get(mandi.getId());
 
-            long totalBookings = mBookings.size();
-
-            List<Booking> completedBookings = mBookings.stream()
-                    .filter(b -> b.getStatus() == BookingStatus.PROCUREMENT_COMPLETED
-                            || b.getStatus() == BookingStatus.PAYMENT_PENDING
-                            || b.getStatus() == BookingStatus.PAYMENT_INITIATED
-                            || b.getStatus() == BookingStatus.PAYMENT_PROCESSING
-                            || b.getStatus() == BookingStatus.PAYMENT_CREDITED
-                            || b.getStatus() == BookingStatus.COMPLETED)
-                    .toList();
-
-            long completedCount = completedBookings.size();
-
-            BigDecimal certifiedQtl = completedBookings.stream()
-                    .map(Booking::getNetWeightQuintals)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
+            long totalBookings = agg != null ? ((Number) agg[1]).longValue() : 0L;
+            long completedCount = agg != null ? ((Number) agg[2]).longValue() : 0L;
+            BigDecimal certifiedQtl = agg != null ? ((BigDecimal) agg[3]).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
             int remainingCapacity = mSlots.stream()
                     .mapToInt(s -> Math.max(0, s.getMaxCapacityQuintals() - s.getBookedQuintals()))
@@ -339,15 +290,12 @@ public class ReportService {
             int queueLen = mandi.getActiveTokensWaiting();
             int waitTime = queueLen * avgProcessingMins;
 
-            // Throughput: completed transactions per operating hour (assumed 8 operating hours/day)
-            double throughputPerHour = Math.round((completedCount / 8.0) * 10.0) / 10.0;
-
-            BigDecimal totalDbt = mPayments.stream()
-                    .filter(p -> "COMPLETED".equalsIgnoreCase(p.getPaymentStatus()))
-                    .map(Payment::getNetPayableAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
+            // Throughput: completed transactions per operating hour (dynamically calculated from operating window)
+            double operatingHours = calculateOperatingHours(mandi.getOpenTime(), mandi.getCloseTime());
+            double throughputPerHour = operatingHours > 0.0
+                    ? Math.round((completedCount / operatingHours) * 10.0) / 10.0
+                    : 0.0;
+            BigDecimal totalDbt = dbtByMandi.getOrDefault(mandi.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
             // Deterministic real-time status calculation
             String derivedStatus;
@@ -453,66 +401,45 @@ public class ReportService {
     }
 
     // ==========================================
-    // 5. CROP-WISE ANALYTICS
+    // 5. CROP-WISE ANALYTICS (DATABASE AGGREGATED)
     // ==========================================
     @Transactional(readOnly = true)
     public List<CropProcurementReportDto> getCropProcurementReports() {
         List<Crop> crops = cropRepository.findAll();
-        List<Booking> allBookings = bookingRepository.findAll();
-        List<Payment> allPayments = paymentRepository.findAll();
 
-        Map<String, List<Booking>> bookingsByCrop = allBookings.stream()
-                .collect(Collectors.groupingBy(b -> b.getCrop().getId()));
+        // Aggregate bookings grouped by crop in SQL
+        // row: [cropId, totalBookings, completedCount, sumNetWeight, sumSettlement, distinctFarmers]
+        Map<String, Object[]> cropAggMap = new HashMap<>();
+        for (Object[] row : bookingRepository.aggregateProcurementByCrop(COMPLETED_STATUSES)) {
+            if (row[0] != null) {
+                cropAggMap.put((String) row[0], row);
+            }
+        }
 
-        Map<UUID, Payment> paymentByBookingId = allPayments.stream()
-                .filter(p -> p.getBooking() != null)
-                .collect(Collectors.toMap(p -> p.getBooking().getId(), p -> p, (a, b) -> a));
+        // Aggregate settled payments by crop in SQL
+        Map<String, BigDecimal> settledPaymentsByCrop = new HashMap<>();
+        for (Object[] row : paymentRepository.sumSettledPaymentsByCrop()) {
+            if (row[0] != null && row[1] != null) {
+                settledPaymentsByCrop.put((String) row[0], (BigDecimal) row[1]);
+            }
+        }
 
         List<CropProcurementReportDto> reports = new ArrayList<>();
 
         for (Crop crop : crops) {
-            List<Booking> cBookings = bookingsByCrop.getOrDefault(crop.getId(), Collections.emptyList());
-            long totalBookings = cBookings.size();
+            Object[] agg = cropAggMap.get(crop.getId());
 
-            List<Booking> completedBookings = cBookings.stream()
-                    .filter(b -> b.getStatus() == BookingStatus.PROCUREMENT_COMPLETED
-                            || b.getStatus() == BookingStatus.PAYMENT_PENDING
-                            || b.getStatus() == BookingStatus.PAYMENT_INITIATED
-                            || b.getStatus() == BookingStatus.PAYMENT_PROCESSING
-                            || b.getStatus() == BookingStatus.PAYMENT_CREDITED
-                            || b.getStatus() == BookingStatus.COMPLETED)
-                    .toList();
-
-            long completedCount = completedBookings.size();
-
-            BigDecimal certifiedQtl = completedBookings.stream()
-                    .map(Booking::getNetWeightQuintals)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal totalValue = completedBookings.stream()
-                    .map(Booking::getSettlementAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            long farmersServed = completedBookings.stream()
-                    .map(b -> b.getFarmer().getId())
-                    .distinct()
-                    .count();
+            long totalBookings = agg != null ? ((Number) agg[1]).longValue() : 0L;
+            long completedCount = agg != null ? ((Number) agg[2]).longValue() : 0L;
+            BigDecimal certifiedQtl = agg != null ? ((BigDecimal) agg[3]).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal totalValue = agg != null ? ((BigDecimal) agg[4]).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            long farmersServed = agg != null ? ((Number) agg[5]).longValue() : 0L;
 
             BigDecimal avgQtl = farmersServed > 0
                     ? certifiedQtl.divide(BigDecimal.valueOf(farmersServed), 2, RoundingMode.HALF_UP)
-                    : BigDecimal.ZERO;
+                    : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
-            BigDecimal dbtDisbursed = completedBookings.stream()
-                    .map(b -> paymentByBookingId.get(b.getId()))
-                    .filter(p -> p != null && "COMPLETED".equalsIgnoreCase(p.getPaymentStatus()))
-                    .map(Payment::getNetPayableAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
+            BigDecimal dbtDisbursed = settledPaymentsByCrop.getOrDefault(crop.getId(), BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
             CropProcurementReportDto dto = new CropProcurementReportDto();
             dto.setCropId(crop.getId());
@@ -534,55 +461,30 @@ public class ReportService {
     }
 
     // ==========================================
-    // 6. WEIGHMENT & QUALITY / MOISTURE ANALYTICS
+    // 6. WEIGHMENT & QUALITY / MOISTURE ANALYTICS (DATABASE AGGREGATED)
     // ==========================================
     @Transactional(readOnly = true)
     public QualityAndWeighmentReportDto getQualityAndWeighmentReport() {
-        List<Weighment> weighments = weighmentRepository.findAll();
-        List<Crop> crops = cropRepository.findAll();
-        Map<String, BigDecimal> moistureLimitByCrop = crops.stream()
-                .collect(Collectors.toMap(Crop::getId, Crop::getMoistureLimitPct));
-
+        List<Object[]> summary = weighmentRepository.getWeighmentSummaryMetrics();
         QualityAndWeighmentReportDto dto = new QualityAndWeighmentReportDto();
 
-        long count = weighments.size();
-        dto.setTotalVehiclesWeighed(count);
-
-        if (count == 0) {
-            dto.setTotalGrossQuintals(BigDecimal.ZERO);
-            dto.setTotalTareQuintals(BigDecimal.ZERO);
-            dto.setTotalCertifiedNetQuintals(BigDecimal.ZERO);
-            dto.setAverageNetQuintalsPerVehicle(BigDecimal.ZERO);
-            dto.setAverageMoisturePct(BigDecimal.ZERO);
-            dto.setMinMoisturePct(BigDecimal.ZERO);
-            dto.setMaxMoisturePct(BigDecimal.ZERO);
-            dto.setSamplesWithinFaqThreshold(0);
-            dto.setSamplesAboveFaqThreshold(0);
-            dto.setPercentAboveFaqThreshold(0.0);
-            dto.setAverageForeignMatterPct(BigDecimal.ZERO);
-            dto.setTotalDockageQuintals(BigDecimal.ZERO);
-            dto.setDockagePercentage(0.0);
+        if (summary.isEmpty() || summary.get(0) == null) {
+            setEmptyQcDto(dto);
             return dto;
         }
 
-        BigDecimal totalGross = weighments.stream()
-                .map(Weighment::getGrossWeightQuintals)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+        Object[] s = summary.get(0);
+        long count = ((Number) s[0]).longValue();
+        dto.setTotalVehiclesWeighed(count);
 
-        BigDecimal totalTare = weighments.stream()
-                .map(Weighment::getTareWeightQuintals)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
+        if (count == 0) {
+            setEmptyQcDto(dto);
+            return dto;
+        }
 
-        BigDecimal totalNet = weighments.stream()
-                .map(Weighment::getNetWeightQuintals)
-                .filter(Objects::nonNull)
-                .reduce(BigDecimal.ZERO, BigDecimal::add)
-                .setScale(2, RoundingMode.HALF_UP);
-
+        BigDecimal totalGross = ((BigDecimal) s[1]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalTare = ((BigDecimal) s[2]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalNet = ((BigDecimal) s[3]).setScale(2, RoundingMode.HALF_UP);
         BigDecimal avgNet = totalNet.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP);
 
         dto.setTotalGrossQuintals(totalGross);
@@ -590,58 +492,63 @@ public class ReportService {
         dto.setTotalCertifiedNetQuintals(totalNet);
         dto.setAverageNetQuintalsPerVehicle(avgNet);
 
-        // Moisture calculations
-        List<BigDecimal> moistures = weighments.stream()
-                .map(Weighment::getMoisturePct)
-                .filter(Objects::nonNull)
-                .toList();
+        BigDecimal avgMoist = ((BigDecimal) s[4]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal minMoist = ((BigDecimal) s[5]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal maxMoist = ((BigDecimal) s[6]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal avgFm = ((BigDecimal) s[7]).setScale(2, RoundingMode.HALF_UP);
 
-        if (!moistures.isEmpty()) {
-            BigDecimal sumMoist = moistures.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal avgMoist = sumMoist.divide(BigDecimal.valueOf(moistures.size()), 2, RoundingMode.HALF_UP);
-            BigDecimal minMoist = moistures.stream().min(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
-            BigDecimal maxMoist = moistures.stream().max(BigDecimal::compareTo).orElse(BigDecimal.ZERO);
+        dto.setAverageMoisturePct(avgMoist);
+        dto.setMinMoisturePct(minMoist);
+        dto.setMaxMoisturePct(maxMoist);
+        dto.setAverageForeignMatterPct(avgFm);
 
-            dto.setAverageMoisturePct(avgMoist);
-            dto.setMinMoisturePct(minMoist);
-            dto.setMaxMoisturePct(maxMoist);
+        // Dockage quantity = totalNet * avgFm / 100
+        BigDecimal totalDockage = totalNet.multiply(avgFm).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
+        dto.setTotalDockageQuintals(totalDockage);
+        dto.setDockagePercentage(avgFm.doubleValue());
 
-            long aboveLimitCount = 0;
-            for (Weighment w : weighments) {
-                if (w.getMoisturePct() != null && w.getBooking() != null && w.getBooking().getCrop() != null) {
-                    BigDecimal limit = moistureLimitByCrop.getOrDefault(w.getBooking().getCrop().getId(), new BigDecimal("12.0"));
-                    if (w.getMoisturePct().compareTo(limit) > 0) {
-                        aboveLimitCount++;
-                    }
-                }
+        // Moisture FAQ threshold check against crop limits
+        List<Crop> crops = cropRepository.findAll();
+        Map<String, BigDecimal> moistureLimitByCrop = crops.stream()
+                .collect(Collectors.toMap(Crop::getId, Crop::getMoistureLimitPct));
+
+        List<Object[]> moisturePairs = weighmentRepository.findMoistureAndCropPairs();
+        long aboveLimitCount = 0;
+        for (Object[] pair : moisturePairs) {
+            BigDecimal mPct = (BigDecimal) pair[0];
+            String cropId = (String) pair[1];
+            BigDecimal limit = cropId != null ? moistureLimitByCrop.getOrDefault(cropId, new BigDecimal("12.0")) : new BigDecimal("12.0");
+            if (mPct != null && mPct.compareTo(limit) > 0) {
+                aboveLimitCount++;
             }
-
-            long withinLimitCount = moistures.size() - aboveLimitCount;
-            double pctAbove = (aboveLimitCount * 100.0) / moistures.size();
-
-            dto.setSamplesWithinFaqThreshold(withinLimitCount);
-            dto.setSamplesAboveFaqThreshold(aboveLimitCount);
-            dto.setPercentAboveFaqThreshold(Math.round(pctAbove * 10.0) / 10.0);
         }
 
-        // Foreign Matter / Dockage
-        List<BigDecimal> fmList = weighments.stream()
-                .map(Weighment::getForeignMatterPct)
-                .filter(Objects::nonNull)
-                .toList();
+        long totalSampled = moisturePairs.size();
+        long withinLimitCount = totalSampled - aboveLimitCount;
+        double pctAbove = totalSampled > 0 ? (aboveLimitCount * 100.0) / totalSampled : 0.0;
 
-        if (!fmList.isEmpty()) {
-            BigDecimal sumFm = fmList.stream().reduce(BigDecimal.ZERO, BigDecimal::add);
-            BigDecimal avgFm = sumFm.divide(BigDecimal.valueOf(fmList.size()), 2, RoundingMode.HALF_UP);
-            dto.setAverageForeignMatterPct(avgFm);
-
-            // Dockage quantity = totalNet * avgFm / 100
-            BigDecimal totalDockage = totalNet.multiply(avgFm).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
-            dto.setTotalDockageQuintals(totalDockage);
-            dto.setDockagePercentage(avgFm.doubleValue());
-        }
+        dto.setSamplesWithinFaqThreshold(withinLimitCount);
+        dto.setSamplesAboveFaqThreshold(aboveLimitCount);
+        dto.setPercentAboveFaqThreshold(Math.round(pctAbove * 10.0) / 10.0);
 
         return dto;
+    }
+
+    private void setEmptyQcDto(QualityAndWeighmentReportDto dto) {
+        dto.setTotalVehiclesWeighed(0);
+        dto.setTotalGrossQuintals(BigDecimal.ZERO);
+        dto.setTotalTareQuintals(BigDecimal.ZERO);
+        dto.setTotalCertifiedNetQuintals(BigDecimal.ZERO);
+        dto.setAverageNetQuintalsPerVehicle(BigDecimal.ZERO);
+        dto.setAverageMoisturePct(BigDecimal.ZERO);
+        dto.setMinMoisturePct(BigDecimal.ZERO);
+        dto.setMaxMoisturePct(BigDecimal.ZERO);
+        dto.setSamplesWithinFaqThreshold(0);
+        dto.setSamplesAboveFaqThreshold(0);
+        dto.setPercentAboveFaqThreshold(0.0);
+        dto.setAverageForeignMatterPct(BigDecimal.ZERO);
+        dto.setTotalDockageQuintals(BigDecimal.ZERO);
+        dto.setDockagePercentage(0.0);
     }
 
     // ==========================================
@@ -649,28 +556,23 @@ public class ReportService {
     // ==========================================
     @Transactional(readOnly = true)
     public PaymentAnalyticsReportDto getPaymentAnalytics(long delaySlaHours) {
-        List<Payment> payments = paymentRepository.findAll();
-        List<Booking> allBookings = bookingRepository.findAll();
+        BigDecimal totalSettledRs = paymentRepository.sumSettledPayments();
+
+        List<Payment> activePayments = paymentRepository.findNonCompletedPaymentsWithDetails();
 
         long initiatedCount = 0;
-        long completedCount = 0;
         long pendingCount = 0;
         long failedCount = 0;
-
-        BigDecimal totalSettledRs = BigDecimal.ZERO;
         BigDecimal totalPendingRs = BigDecimal.ZERO;
 
         List<PaymentAnalyticsReportDto.PaymentDelayAlertDto> delayed = new ArrayList<>();
         OffsetDateTime now = OffsetDateTime.now();
 
-        for (Payment p : payments) {
+        for (Payment p : activePayments) {
             String status = p.getPaymentStatus();
             BigDecimal netAmount = p.getNetPayableAmount() != null ? p.getNetPayableAmount() : BigDecimal.ZERO;
 
-            if ("COMPLETED".equalsIgnoreCase(status)) {
-                completedCount++;
-                totalSettledRs = totalSettledRs.add(netAmount);
-            } else if ("FAILED".equalsIgnoreCase(status)) {
+            if ("FAILED".equalsIgnoreCase(status)) {
                 failedCount++;
                 totalPendingRs = totalPendingRs.add(netAmount);
             } else if ("INITIATED".equalsIgnoreCase(status) || "PROCESSING".equalsIgnoreCase(status)) {
@@ -681,27 +583,33 @@ public class ReportService {
                 totalPendingRs = totalPendingRs.add(netAmount);
             }
 
-            // Delay Detection: if not completed, check age since initiation or creation
-            if (!"COMPLETED".equalsIgnoreCase(status)) {
-                OffsetDateTime referenceTime = p.getInitiatedAt() != null ? p.getInitiatedAt() : p.getCreatedAt();
-                long hours = Duration.between(referenceTime, now).toHours();
-                if (hours >= delaySlaHours) {
-                    PaymentAnalyticsReportDto.PaymentDelayAlertDto alert = new PaymentAnalyticsReportDto.PaymentDelayAlertDto();
+            // Delay Detection: check age since initiation or creation
+            OffsetDateTime referenceTime = p.getInitiatedAt() != null ? p.getInitiatedAt() : p.getCreatedAt();
+            long hours = Duration.between(referenceTime, now).toHours();
+            if (hours >= delaySlaHours) {
+                PaymentAnalyticsReportDto.PaymentDelayAlertDto alert = new PaymentAnalyticsReportDto.PaymentDelayAlertDto();
+                if (p.getBooking() != null) {
                     alert.setBookingId(p.getBooking().getId().toString());
                     alert.setTokenNumber(p.getBooking().getTokenNumber());
+                }
+                if (p.getFarmer() != null) {
                     alert.setFarmerReference(p.getFarmer().getName() + " (" + p.getFarmer().getKisanId() + ")");
                     alert.setMaskedAadhar(p.getFarmer().getMaskedAadhar());
+                }
+                if (p.getMandi() != null) {
                     alert.setMandiId(p.getMandi().getId());
                     alert.setMandiName(p.getMandi().getName());
-                    alert.setNetPayableAmount(netAmount);
-                    alert.setPaymentStatus(status);
-                    alert.setCompletedAt(p.getCreatedAt().toString());
-                    alert.setDelayHours(hours);
-                    alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
-                    delayed.add(alert);
                 }
+                alert.setNetPayableAmount(netAmount);
+                alert.setPaymentStatus(status);
+                alert.setCompletedAt(p.getCreatedAt().toString());
+                alert.setDelayHours(hours);
+                alert.setMaskedAccount("XXXX-XXXX-" + p.getBankAccountLast4());
+                delayed.add(alert);
             }
         }
+
+        long completedCount = paymentRepository.count() - activePayments.size();
 
         PaymentAnalyticsReportDto dto = new PaymentAnalyticsReportDto();
         dto.setTotalDbtInitiated(initiatedCount + completedCount);
@@ -717,49 +625,34 @@ public class ReportService {
     }
 
     // ==========================================
-    // 8. TIME-SERIES ANALYTICS (7, 30 DAYS, OR CUSTOM)
+    // 8. TIME-SERIES ANALYTICS (DATABASE AGGREGATED)
     // ==========================================
     @Transactional(readOnly = true)
     public List<TimeSeriesPointDto> getTimeSeries(int days) {
-        List<Booking> bookings = bookingRepository.findAll();
         LocalDate today = LocalDate.now(IST_ZONE);
         LocalDate start = today.minusDays(days - 1);
 
-        Map<LocalDate, List<Booking>> grouped = bookings.stream()
-                .filter(b -> !b.getScheduledDate().isBefore(start) && !b.getScheduledDate().isAfter(today))
-                .collect(Collectors.groupingBy(Booking::getScheduledDate));
+        // row: [scheduledDate, totalCount, completedCount, sumNetWeight, sumSettlement, distinctFarmers]
+        List<Object[]> dailyAggs = bookingRepository.aggregateDailyTimeSeries(start, today, COMPLETED_STATUSES);
+        Map<LocalDate, Object[]> aggByDate = new HashMap<>();
+        for (Object[] row : dailyAggs) {
+            if (row[0] != null) {
+                aggByDate.put((LocalDate) row[0], row);
+            }
+        }
 
         DateTimeFormatter fmt = DateTimeFormatter.ofPattern("dd MMM");
         List<TimeSeriesPointDto> points = new ArrayList<>();
 
         for (int i = 0; i < days; i++) {
             LocalDate d = start.plusDays(i);
-            List<Booking> dayBookings = grouped.getOrDefault(d, Collections.emptyList());
+            Object[] agg = aggByDate.get(d);
 
-            long bCount = dayBookings.size();
-            List<Booking> completed = dayBookings.stream()
-                    .filter(b -> b.getStatus() == BookingStatus.PROCUREMENT_COMPLETED
-                            || b.getStatus() == BookingStatus.PAYMENT_PENDING
-                            || b.getStatus() == BookingStatus.PAYMENT_INITIATED
-                            || b.getStatus() == BookingStatus.PAYMENT_PROCESSING
-                            || b.getStatus() == BookingStatus.PAYMENT_CREDITED
-                            || b.getStatus() == BookingStatus.COMPLETED)
-                    .toList();
-
-            long compCount = completed.size();
-            BigDecimal netQtl = completed.stream()
-                    .map(Booking::getNetWeightQuintals)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            BigDecimal payout = completed.stream()
-                    .map(Booking::getSettlementAmount)
-                    .filter(Objects::nonNull)
-                    .reduce(BigDecimal.ZERO, BigDecimal::add)
-                    .setScale(2, RoundingMode.HALF_UP);
-
-            long farmersServed = completed.stream().map(b -> b.getFarmer().getId()).distinct().count();
+            long bCount = agg != null ? ((Number) agg[1]).longValue() : 0L;
+            long compCount = agg != null ? ((Number) agg[2]).longValue() : 0L;
+            BigDecimal netQtl = agg != null ? ((BigDecimal) agg[3]).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            BigDecimal payout = agg != null ? ((BigDecimal) agg[4]).setScale(2, RoundingMode.HALF_UP) : BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            long farmersServed = agg != null ? ((Number) agg[5]).longValue() : 0L;
 
             points.add(new TimeSeriesPointDto(d.format(fmt), bCount, compCount, netQtl, payout, farmersServed));
         }
@@ -768,11 +661,11 @@ public class ReportService {
     }
 
     // ==========================================
-    // 9. PROCUREMENT REGISTER (FULL AUDIT & EXPORT ROWS)
+    // 9. PROCUREMENT REGISTER (STREAMLINED FILTER QUERY)
     // ==========================================
     @Transactional(readOnly = true)
     public List<ProcurementRegisterRowDto> getProcurementRegister(String district, String mandiId, String cropId) {
-        List<Booking> bookings = bookingRepository.findAll();
+        List<Booking> bookings = bookingRepository.findFilteredForRegister(district, mandiId, cropId);
         List<Weighment> weighments = weighmentRepository.findAll();
         List<Payment> payments = paymentRepository.findAll();
 
@@ -783,10 +676,6 @@ public class ReportService {
                 .collect(Collectors.toMap(p -> p.getBooking().getId(), p -> p, (a, b) -> a));
 
         return bookings.stream()
-                .filter(b -> district == null || district.isBlank() || b.getMandi().getDistrict().equalsIgnoreCase(district.trim()))
-                .filter(b -> mandiId == null || mandiId.isBlank() || b.getMandi().getId().equalsIgnoreCase(mandiId.trim()))
-                .filter(b -> cropId == null || cropId.isBlank() || b.getCrop().getId().equalsIgnoreCase(cropId.trim()))
-                .sorted(Comparator.comparing(Booking::getScheduledDate).reversed())
                 .map(b -> {
                     ProcurementRegisterRowDto row = new ProcurementRegisterRowDto();
                     row.setBookingId(b.getId().toString());
@@ -825,4 +714,41 @@ public class ReportService {
                 })
                 .toList();
     }
+
+    private double calculateOperatingHours(String openTimeStr, String closeTimeStr) {
+        if (openTimeStr == null || closeTimeStr == null || openTimeStr.isBlank() || closeTimeStr.isBlank()) {
+            return 8.0;
+        }
+        try {
+            LocalTime open = parseTimeString(openTimeStr.trim());
+            LocalTime close = parseTimeString(closeTimeStr.trim());
+            if (open != null && close != null) {
+                long minutes = java.time.Duration.between(open, close).toMinutes();
+                if (minutes <= 0) {
+                    minutes += 24 * 60; // handle overnight wrap-around safely
+                }
+                double hours = minutes / 60.0;
+                return hours > 0.0 ? hours : 8.0;
+            }
+        } catch (Exception ignored) {
+            // Fall back to standard 8-hour operating shift
+        }
+        return 8.0;
+    }
+
+    private LocalTime parseTimeString(String timeStr) {
+        DateTimeFormatter[] formatters = new DateTimeFormatter[]{
+                DateTimeFormatter.ofPattern("hh:mm a", Locale.ENGLISH),
+                DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH),
+                DateTimeFormatter.ofPattern("HH:mm"),
+                DateTimeFormatter.ofPattern("H:mm")
+        };
+        for (DateTimeFormatter dtf : formatters) {
+            try {
+                return LocalTime.parse(timeStr.toUpperCase(), dtf);
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
 }
+

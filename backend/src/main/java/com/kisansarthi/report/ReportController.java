@@ -64,9 +64,11 @@ public class ReportController {
     @GetMapping("/payment-analytics")
     @Operation(summary = "Get DBT and PFMS payment reconciliation, status breakdown, and delay SLA alerts")
     public ResponseEntity<ApiResponse<PaymentAnalyticsReportDto>> getPaymentAnalytics(
-            @RequestParam(defaultValue = "24") long delaySlaHours
+            @RequestParam(required = false) Long delaySlaHours,
+            @RequestParam(required = false) Long delayThresholdHours
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaymentAnalytics(delaySlaHours)));
+        long effectiveHours = delaySlaHours != null ? delaySlaHours : (delayThresholdHours != null ? delayThresholdHours : 24L);
+        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaymentAnalytics(effectiveHours)));
     }
 
     @GetMapping("/time-series")
