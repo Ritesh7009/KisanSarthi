@@ -483,9 +483,9 @@ public class ReportService {
             return dto;
         }
 
-        BigDecimal totalGross = ((BigDecimal) s[1]).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalTare = ((BigDecimal) s[2]).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal totalNet = ((BigDecimal) s[3]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalGross = toBigDecimal(s[1]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalTare = toBigDecimal(s[2]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal totalNet = toBigDecimal(s[3]).setScale(2, RoundingMode.HALF_UP);
         BigDecimal avgNet = totalNet.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP);
 
         dto.setTotalGrossQuintals(totalGross);
@@ -493,10 +493,10 @@ public class ReportService {
         dto.setTotalCertifiedNetQuintals(totalNet);
         dto.setAverageNetQuintalsPerVehicle(avgNet);
 
-        BigDecimal avgMoist = ((BigDecimal) s[4]).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal minMoist = ((BigDecimal) s[5]).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal maxMoist = ((BigDecimal) s[6]).setScale(2, RoundingMode.HALF_UP);
-        BigDecimal avgFm = ((BigDecimal) s[7]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal avgMoist = toBigDecimal(s[4]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal minMoist = toBigDecimal(s[5]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal maxMoist = toBigDecimal(s[6]).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal avgFm = toBigDecimal(s[7]).setScale(2, RoundingMode.HALF_UP);
 
         dto.setAverageMoisturePct(avgMoist);
         dto.setMinMoisturePct(minMoist);
@@ -505,7 +505,7 @@ public class ReportService {
 
         // True mathematical dockage: SUM(net_weight * foreign_matter_pct / 100)
         BigDecimal totalDockage = s.length > 8 && s[8] != null
-                ? ((BigDecimal) s[8]).setScale(2, RoundingMode.HALF_UP)
+                ? toBigDecimal(s[8]).setScale(2, RoundingMode.HALF_UP)
                 : totalNet.multiply(avgFm).divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         dto.setTotalDockageQuintals(totalDockage);
 
@@ -695,26 +695,29 @@ public class ReportService {
     // ==========================================
     // 9. PROCUREMENT REGISTER (OPTIMIZED JOIN QUERIES & PAGINATION)
     // ==========================================
+    @Deprecated
     @Transactional(readOnly = true)
     public List<ProcurementRegisterRowDto> getProcurementRegister(String district, String mandiId, String cropId) {
-        // Enforce strict server-side bounding (max 200) for non-paginated compatibility endpoint
+        // Enforce strict server-side bounding (max 200) for legacy non-paginated compatibility endpoint
         org.springframework.data.domain.PageRequest pageRequest =
                 org.springframework.data.domain.PageRequest.of(0, ReportConstants.MAX_REGISTER_PAGE_SIZE);
         org.springframework.data.domain.Page<Booking> bookingPage =
-                bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, pageRequest);
+                bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, null, pageRequest);
         return mapBookingsToRegisterRows(bookingPage.getContent());
     }
 
     @Transactional(readOnly = true)
     public PaginatedProcurementRegisterDto getPaginatedProcurementRegister(
-            String district, String mandiId, String cropId, int page, int size
+            String district, String mandiId, String cropId, String search, int page, int size
     ) {
         int boundedSize = Math.max(1, Math.min(size, ReportConstants.MAX_REGISTER_PAGE_SIZE));
         int boundedPage = Math.max(0, page);
         org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(boundedPage, boundedSize);
 
+        String trimmedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
+
         org.springframework.data.domain.Page<Booking> bookingPage = bookingRepository.findFilteredForRegisterPageable(
-                district, mandiId, cropId, pageRequest
+                district, mandiId, cropId, trimmedSearch, pageRequest
         );
 
         List<ProcurementRegisterRowDto> content = mapBookingsToRegisterRows(bookingPage.getContent());
@@ -737,6 +740,7 @@ public class ReportService {
             String district,
             String mandiId,
             String cropId,
+            String search,
             java.io.OutputStream outputStream
     ) throws java.io.IOException {
         CsvStreamWriter csvWriter = new CsvStreamWriter(outputStream);
@@ -747,6 +751,8 @@ public class ReportService {
                 "Bank Account", "IFSC", "Completed At"
         );
 
+        String trimmedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
+
         int pageIndex = 0;
         int batchSize = ReportConstants.CSV_EXPORT_BATCH_SIZE;
         boolean hasMore = true;
@@ -756,7 +762,7 @@ public class ReportService {
                     org.springframework.data.domain.PageRequest.of(pageIndex, batchSize);
 
             org.springframework.data.domain.Page<Booking> bookingPage =
-                    bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, pageRequest);
+                    bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, trimmedSearch, pageRequest);
 
             List<Booking> batchBookings = bookingPage.getContent();
             if (batchBookings.isEmpty()) {
@@ -768,8 +774,11 @@ public class ReportService {
                 csvWriter.writeProcurementRow(row);
             }
 
-            hasMore = !bookingPage.isLast() && (pageIndex + 1 < bookingPage.getTotalPages());
-            pageIndex++;
+            if (bookingPage.isLast() || batchBookings.size() < batchSize) {
+                hasMore = false;
+            } else {
+                pageIndex++;
+            }
         }
 
         csvWriter.flush();
@@ -848,6 +857,17 @@ public class ReportService {
             // Fall back to standard 8-hour operating shift
         }
         return 8.0;
+    }
+
+    private BigDecimal toBigDecimal(Object val) {
+        if (val == null) return BigDecimal.ZERO;
+        if (val instanceof BigDecimal) return (BigDecimal) val;
+        if (val instanceof Number) return BigDecimal.valueOf(((Number) val).doubleValue());
+        try {
+            return new BigDecimal(val.toString().trim());
+        } catch (Exception e) {
+            return BigDecimal.ZERO;
+        }
     }
 
     private LocalTime parseTimeString(String timeStr) {

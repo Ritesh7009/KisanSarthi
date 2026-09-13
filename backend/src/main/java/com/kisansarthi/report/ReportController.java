@@ -95,10 +95,11 @@ public class ReportController {
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String mandiId,
             @RequestParam(required = false) String cropId,
+            @RequestParam(required = false) String search,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size
     ) {
-        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaginatedProcurementRegister(district, mandiId, cropId, page, size)));
+        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaginatedProcurementRegister(district, mandiId, cropId, search, page, size)));
     }
 
     @GetMapping("/export/csv")
@@ -106,10 +107,11 @@ public class ReportController {
     public ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> exportProcurementCsv(
             @RequestParam(required = false) String district,
             @RequestParam(required = false) String mandiId,
-            @RequestParam(required = false) String cropId
+            @RequestParam(required = false) String cropId,
+            @RequestParam(required = false) String search
     ) {
         org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
-            reportService.streamProcurementRegisterCsv(district, mandiId, cropId, outputStream);
+            reportService.streamProcurementRegisterCsv(district, mandiId, cropId, search, outputStream);
         };
 
         return ResponseEntity.ok()

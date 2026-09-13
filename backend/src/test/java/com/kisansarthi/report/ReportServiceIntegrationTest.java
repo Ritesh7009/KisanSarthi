@@ -256,4 +256,27 @@ public class ReportServiceIntegrationTest {
         assertEquals("COMPLETED", row.getPaymentStatus());
         assertEquals(new BigDecimal("48.50"), row.getNetWeightQuintals());
     }
+
+    @Test
+    @DisplayName("Verify paginated procurement register with search and limit bounding")
+    void testPaginatedProcurementRegister() {
+        PaginatedProcurementRegisterDto page = reportService.getPaginatedProcurementRegister("Sehore", testMandi.getId(), null, "Ramesh", 0, 10);
+        assertNotNull(page);
+        assertEquals(0, page.getPage());
+        assertTrue(page.getTotalElements() >= 1);
+        assertFalse(page.getContent().isEmpty());
+        assertTrue(page.getContent().get(0).getFarmerName().contains("Ramesh"));
+    }
+
+    @Test
+    @DisplayName("Verify CSV streaming output generation")
+    void testCsvStreaming() throws java.io.IOException {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        reportService.streamProcurementRegisterCsv("Sehore", testMandi.getId(), null, null, out);
+        String csv = out.toString(java.nio.charset.StandardCharsets.UTF_8);
+        assertNotNull(csv);
+        assertTrue(csv.contains("Token Number"));
+        assertTrue(csv.contains("Ramesh Patel"));
+        assertTrue(csv.contains("48.50"));
+    }
 }

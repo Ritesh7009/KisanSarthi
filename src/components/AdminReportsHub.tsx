@@ -86,12 +86,13 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
   const [paymentReport, setPaymentReport] = useState<PaymentAnalyticsReport | null>(null);
   const [timeSeries, setTimeSeries] = useState<TimeSeriesPoint[]>([]);
 
-  const fetchRegisterData = useCallback(async (page: number, size: number) => {
+  const fetchRegisterData = useCallback(async (page: number, size: number, search?: string) => {
     setIsRegisterLoading(true);
     try {
       const data = await reportApi.getPaginatedProcurementRegister({
         district: selectedDistrict === 'ALL' ? undefined : selectedDistrict,
         cropId: selectedCrop === 'ALL' ? undefined : selectedCrop,
+        search: search && search.trim() ? search.trim() : undefined,
         page,
         size,
       });
@@ -135,7 +136,7 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
       if (pay) setPaymentReport(pay);
       if (ts) setTimeSeries(ts);
 
-      await fetchRegisterData(registerPage, registerPageSize);
+      await fetchRegisterData(registerPage, registerPageSize, registerSearch);
     } catch (err) {
       console.error('Failed to load reports data', err);
     } finally {
@@ -148,8 +149,11 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
   }, [selectedDistrict, selectedCrop]);
 
   useEffect(() => {
-    fetchRegisterData(registerPage, registerPageSize);
-  }, [registerPage, registerPageSize, fetchRegisterData]);
+    const handler = setTimeout(() => {
+      fetchRegisterData(registerPage, registerPageSize, registerSearch);
+    }, 250);
+    return () => clearTimeout(handler);
+  }, [registerPage, registerPageSize, registerSearch, fetchRegisterData]);
 
   const uniqueDistricts = Array.from(new Set(mandis.map((m) => m.district))).sort();
 
@@ -239,6 +243,7 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
             href={reportApi.getExportCsvUrl({
               district: selectedDistrict === 'ALL' ? undefined : selectedDistrict,
               cropId: selectedCrop === 'ALL' ? undefined : selectedCrop,
+              search: registerSearch && registerSearch.trim() ? registerSearch.trim() : undefined,
             })}
             download
             className="px-4 py-2 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
@@ -783,8 +788,11 @@ export const AdminReportsHub: React.FC<Props> = ({ mandis, crops }) => {
                 <input
                   type="text"
                   value={registerSearch}
-                  onChange={(e) => setRegisterSearch(e.target.value)}
-                  placeholder="Filter page by token, farmer..."
+                  onChange={(e) => {
+                    setRegisterSearch(e.target.value);
+                    setRegisterPage(0);
+                  }}
+                  placeholder="Search token, farmer, phone, mandi..."
                   className="w-full pl-9 pr-3 py-2 text-xs bg-[#F3F6F1] border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
                 />
               </div>

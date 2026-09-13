@@ -640,6 +640,7 @@ export const reportApi = {
     district?: string;
     mandiId?: string;
     cropId?: string;
+    search?: string;
     page?: number;
     size?: number;
   }): Promise<PaginatedProcurementRegister> {
@@ -647,6 +648,7 @@ export const reportApi = {
     if (params?.district) sp.append('district', params.district);
     if (params?.mandiId) sp.append('mandiId', params.mandiId);
     if (params?.cropId) sp.append('cropId', params.cropId);
+    if (params?.search) sp.append('search', params.search);
     if (params?.page !== undefined) sp.append('page', params.page.toString());
     if (params?.size !== undefined) sp.append('size', params.size.toString());
     const qs = sp.toString() ? `?${sp.toString()}` : '';
@@ -656,11 +658,12 @@ export const reportApi = {
     return (res as any)?.data || res;
   },
 
-  getExportCsvUrl(params?: { district?: string; mandiId?: string; cropId?: string }): string {
+  getExportCsvUrl(params?: { district?: string; mandiId?: string; cropId?: string; search?: string }): string {
     const sp = new URLSearchParams();
     if (params?.district) sp.append('district', params.district);
     if (params?.mandiId) sp.append('mandiId', params.mandiId);
     if (params?.cropId) sp.append('cropId', params.cropId);
+    if (params?.search) sp.append('search', params.search);
     const qs = sp.toString() ? `?${sp.toString()}` : '';
     return apiUrl(`/api/v1/reports/export/csv${qs}`);
   },

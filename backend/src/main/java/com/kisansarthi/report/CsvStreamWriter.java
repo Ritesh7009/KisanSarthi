@@ -5,21 +5,34 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
 import java.nio.charset.StandardCharsets;
-import java.util.function.Consumer;
 
 public final class CsvStreamWriter {
 
+    private static final int FLUSH_INTERVAL_ROWS = 100;
+
     private final Writer writer;
+    private int rowsSinceLastFlush = 0;
 
     public CsvStreamWriter(OutputStream outputStream) {
         this.writer = new OutputStreamWriter(outputStream, StandardCharsets.UTF_8);
     }
 
     public void writeHeader(String... headers) throws IOException {
-        writeRow(headers);
+        writeRowInternal(headers);
+        writer.flush(); // ensure header is flushed immediately
+        rowsSinceLastFlush = 0;
     }
 
     public void writeRow(String... columns) throws IOException {
+        writeRowInternal(columns);
+        rowsSinceLastFlush++;
+        if (rowsSinceLastFlush >= FLUSH_INTERVAL_ROWS) {
+            writer.flush();
+            rowsSinceLastFlush = 0;
+        }
+    }
+
+    private void writeRowInternal(String... columns) throws IOException {
         for (int i = 0; i < columns.length; i++) {
             if (i > 0) {
                 writer.write(",");
@@ -27,7 +40,6 @@ public final class CsvStreamWriter {
             writer.write(escape(columns[i]));
         }
         writer.write("\n");
-        writer.flush();
     }
 
     public void writeProcurementRow(ProcurementRegisterRowDto r) throws IOException {
@@ -64,5 +76,6 @@ public final class CsvStreamWriter {
 
     public void flush() throws IOException {
         writer.flush();
+        rowsSinceLastFlush = 0;
     }
 }

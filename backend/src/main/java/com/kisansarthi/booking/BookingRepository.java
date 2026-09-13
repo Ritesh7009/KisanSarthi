@@ -87,15 +87,30 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
            "WHERE (:district IS NULL OR :district = '' OR LOWER(m.district) = LOWER(:district)) " +
            "AND (:mandiId IS NULL OR :mandiId = '' OR m.id = :mandiId) " +
            "AND (:cropId IS NULL OR :cropId = '' OR c.id = :cropId) " +
-           "ORDER BY b.scheduledDate DESC, b.createdAt DESC",
+           "AND (:search IS NULL OR :search = '' OR (" +
+           "   LOWER(b.tokenNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(f.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(f.phone) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(m.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))" +
+           ")) " +
+           "ORDER BY b.scheduledDate DESC, b.createdAt DESC, b.id DESC",
            countQuery = "SELECT COUNT(b) FROM Booking b " +
            "WHERE (:district IS NULL OR :district = '' OR LOWER(b.mandi.district) = LOWER(:district)) " +
            "AND (:mandiId IS NULL OR :mandiId = '' OR b.mandi.id = :mandiId) " +
-           "AND (:cropId IS NULL OR :cropId = '' OR b.crop.id = :cropId)")
+           "AND (:cropId IS NULL OR :cropId = '' OR b.crop.id = :cropId) " +
+           "AND (:search IS NULL OR :search = '' OR (" +
+           "   LOWER(b.tokenNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(b.farmer.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(b.farmer.phone) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(b.mandi.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(b.crop.name) LIKE LOWER(CONCAT('%', :search, '%'))" +
+           "))")
     Page<Booking> findFilteredForRegisterPageable(
             @Param("district") String district,
             @Param("mandiId") String mandiId,
             @Param("cropId") String cropId,
+            @Param("search") String search,
             Pageable pageable);
 
     @Query("SELECT b FROM Booking b " +
@@ -105,11 +120,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
            "WHERE (:district IS NULL OR :district = '' OR LOWER(m.district) = LOWER(:district)) " +
            "AND (:mandiId IS NULL OR :mandiId = '' OR m.id = :mandiId) " +
            "AND (:cropId IS NULL OR :cropId = '' OR c.id = :cropId) " +
-           "ORDER BY b.scheduledDate DESC, b.createdAt DESC")
+           "AND (:search IS NULL OR :search = '' OR (" +
+           "   LOWER(b.tokenNumber) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(f.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(f.phone) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(m.name) LIKE LOWER(CONCAT('%', :search, '%')) OR " +
+           "   LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%'))" +
+           ")) " +
+           "ORDER BY b.scheduledDate DESC, b.createdAt DESC, b.id DESC")
     List<Booking> findFilteredForRegister(
             @Param("district") String district,
             @Param("mandiId") String mandiId,
-            @Param("cropId") String cropId);
+            @Param("cropId") String cropId,
+            @Param("search") String search);
 }
 
 
