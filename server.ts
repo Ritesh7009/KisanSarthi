@@ -1935,16 +1935,16 @@ async function startServer() {
   // Dynamic Statewide Overview
   app.get(['/api/v1/reports/overview', '/api/reports/overview'], (req, res) => {
     const completedBookings = bookings.filter((b) =>
-      ['PROCUREMENT_COMPLETED', 'PAYMENT_PENDING', 'PAYMENT_INITIATED', 'PAYMENT_PROCESSING', 'PAYMENT_CREDITED', 'COMPLETED', 'CONFIRMED'].includes(b.status)
+      ['PROCUREMENT_COMPLETED', 'PAYMENT_PROCESSING', 'COMPLETED'].includes(b.status)
     );
 
-    const totalCertifiedQuantity = completedBookings.reduce((acc, b) => acc + (b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 0)), 0);
+    const totalCertifiedQuantity = completedBookings.reduce((acc, b) => acc + (b.netWeightQuintals || b.estimatedYieldQuintals || 0), 0);
     const totalProcurementValue = completedBookings.reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
-    const totalDbtDisbursed = bookings.filter(b => b.paymentStatus === 'PAID').reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
+    const totalDbtDisbursed = bookings.filter(b => b.paymentStatus === 'COMPLETED' || b.paymentStatus === 'CREDITED_TO_BANK').reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
     const totalFarmersServed = new Set(completedBookings.map((b) => b.farmerPhone || b.farmerName)).size;
     const totalActiveMandis = mandis.filter((m) => m.gateStatus === 'OPEN').length || mandis.length;
     const totalWaitingFarmers = bookings.filter((b) =>
-      ['GATE_CALLED', 'GATE_ENTERED', 'WEIGHING', 'QUALITY_CHECK', 'WAITING'].includes(b.status)
+      ['GATE_CALLED', 'GATE_ENTERED', 'WEIGHING', 'WEIGHMENT_STAGE_1', 'QC_INSPECTION', 'WEIGHBRIDGE_GROSS'].includes(b.status)
     ).length;
 
     const statusBreakdown: Record<string, number> = {};
@@ -1981,10 +1981,10 @@ async function startServer() {
     bookings.forEach((b) => {
       const dist = (b.district || 'Sehore').toLowerCase();
       if (districtGroups[dist]) {
-        const netQtl = b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 0);
-        if (['PROCUREMENT_COMPLETED', 'PAYMENT_PENDING', 'PAYMENT_INITIATED', 'PAYMENT_PROCESSING', 'PAYMENT_CREDITED', 'COMPLETED', 'CONFIRMED'].includes(b.status)) {
+        const netQtl = b.netWeightQuintals || b.estimatedYieldQuintals || 0;
+        if (['PROCUREMENT_COMPLETED', 'PAYMENT_PROCESSING', 'COMPLETED'].includes(b.status)) {
           districtGroups[dist].totalProcuredQuintals += netQtl;
-          if (b.paymentStatus === 'PAID') {
+          if (b.paymentStatus === 'COMPLETED' || b.paymentStatus === 'CREDITED_TO_BANK') {
             districtGroups[dist].dbtDisbursedCrores += (b.totalPayoutRs || 0) / 10000000.0;
           }
         }
@@ -2026,10 +2026,10 @@ async function startServer() {
     const performance = targetMandis.map((m) => {
       const mBookings = bookings.filter((b) => b.mandiCenterId === m.id);
       const completed = mBookings.filter((b) =>
-        ['PROCUREMENT_COMPLETED', 'PAYMENT_PENDING', 'PAYMENT_INITIATED', 'PAYMENT_PROCESSING', 'PAYMENT_CREDITED', 'COMPLETED', 'CONFIRMED'].includes(b.status)
+        ['PROCUREMENT_COMPLETED', 'PAYMENT_PROCESSING', 'COMPLETED'].includes(b.status)
       );
-      const certifiedQtl = completed.reduce((acc, b) => acc + (b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 0)), 0);
-      const totalDbt = mBookings.filter((b) => b.paymentStatus === 'PAID').reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
+      const certifiedQtl = completed.reduce((acc, b) => acc + (b.netWeightQuintals || b.estimatedYieldQuintals || 0), 0);
+      const totalDbt = mBookings.filter((b) => b.paymentStatus === 'COMPLETED' || b.paymentStatus === 'CREDITED_TO_BANK').reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
 
       const queueLen = m.activeTokensWaiting || 0;
       const avgMins = m.averageProcessingMins || 15;
@@ -2121,12 +2121,12 @@ async function startServer() {
     const cropReports = crops.map((crop) => {
       const cBookings = bookings.filter((b) => (b.cropName || '').toLowerCase().includes(crop.name.toLowerCase().split(' ')[0]));
       const completed = cBookings.filter((b) =>
-        ['PROCUREMENT_COMPLETED', 'PAYMENT_PENDING', 'PAYMENT_INITIATED', 'PAYMENT_PROCESSING', 'PAYMENT_CREDITED', 'COMPLETED', 'CONFIRMED'].includes(b.status)
+        ['PROCUREMENT_COMPLETED', 'PAYMENT_PROCESSING', 'COMPLETED'].includes(b.status)
       );
 
-      const netQtl = completed.reduce((acc, b) => acc + (b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 0)), 0);
+      const netQtl = completed.reduce((acc, b) => acc + (b.netWeightQuintals || b.estimatedYieldQuintals || 0), 0);
       const totalVal = completed.reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
-      const dbt = cBookings.filter((b) => b.paymentStatus === 'PAID').reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
+      const dbt = cBookings.filter((b) => b.paymentStatus === 'COMPLETED' || b.paymentStatus === 'CREDITED_TO_BANK').reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
       const farmersCount = new Set(completed.map((b) => b.farmerPhone || b.farmerName)).size;
       const avgQtl = farmersCount > 0 ? netQtl / farmersCount : 0;
 
@@ -2151,14 +2151,14 @@ async function startServer() {
   // Quality & Weighment Analytics
   app.get(['/api/v1/reports/quality-weighment', '/api/reports/quality-weighment'], (req, res) => {
     const completed = bookings.filter((b) =>
-      ['PROCUREMENT_COMPLETED', 'PAYMENT_PENDING', 'PAYMENT_INITIATED', 'PAYMENT_PROCESSING', 'PAYMENT_CREDITED', 'COMPLETED', 'CONFIRMED'].includes(b.status)
+      ['PROCUREMENT_COMPLETED', 'PAYMENT_PROCESSING', 'COMPLETED'].includes(b.status)
     );
 
     const moistures = completed.map((b) => b.moisturePct || 11.2);
     const avgMoisture = moistures.length > 0 ? moistures.reduce((a, b) => a + b, 0) / moistures.length : 11.4;
     const aboveFaq = moistures.filter((m) => m > 12.0).length;
 
-    const totalNet = completed.reduce((acc, b) => acc + (b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 0)), 0);
+    const totalNet = completed.reduce((acc, b) => acc + (b.netWeightQuintals || b.estimatedYieldQuintals || 0), 0);
     const totalGross = totalNet * 1.35; // Standard tare factor
     const totalTare = totalGross - totalNet;
 
@@ -2185,19 +2185,19 @@ async function startServer() {
 
   // Payment & DBT Analytics
   app.get(['/api/v1/reports/payment-analytics', '/api/reports/payment-analytics'], (req, res) => {
-    const paidBookings = bookings.filter((b) => b.paymentStatus === 'PAID');
-    const pendingBookings = bookings.filter((b) => b.paymentStatus !== 'PAID');
+    const paidBookings = bookings.filter((b) => b.paymentStatus === 'COMPLETED' || b.paymentStatus === 'CREDITED_TO_BANK');
+    const pendingBookings = bookings.filter((b) => b.paymentStatus !== 'COMPLETED' && b.paymentStatus !== 'CREDITED_TO_BANK');
 
     const totalSettled = paidBookings.reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
     const totalPending = pendingBookings.reduce((acc, b) => acc + (b.totalPayoutRs || 0), 0);
 
     const delayedPayments = pendingBookings
-      .filter((b) => b.status === 'PROCUREMENT_COMPLETED' || b.status === 'PAYMENT_PENDING')
+      .filter((b) => b.status === 'PROCUREMENT_COMPLETED' || b.status === 'PAYMENT_PROCESSING')
       .map((b) => ({
         bookingId: b.id,
         tokenNumber: b.tokenNumber,
         farmerReference: `${b.farmerName} (${b.farmerPhone})`,
-        maskedAadhar: b.aadharNumber || 'XXXX-XXXX-4589',
+        maskedAadhar: b.farmerAadhar || 'XXXX-XXXX-4589',
         mandiId: b.mandiCenterId,
         mandiName: b.mandiCenterName,
         netPayableAmount: b.totalPayoutRs || 85000,
@@ -2233,7 +2233,7 @@ async function startServer() {
       const label = d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
       // Count bookings matching day or simulate trend
       const count = bookings.filter((b) => {
-        const bd = new Date(b.createdAt || b.date);
+        const bd = new Date(b.createdAt || b.scheduledDate);
         return bd.toDateString() === d.toDateString();
       }).length;
 
@@ -2268,15 +2268,15 @@ async function startServer() {
       bookingId: b.id,
       tokenNumber: b.tokenNumber,
       tokenSequence: b.tokenSequence || 1,
-      scheduledDate: b.date,
+      scheduledDate: b.scheduledDate,
       farmerName: b.farmerName,
       farmerPhone: b.farmerPhone,
-      maskedAadhar: b.aadharNumber || 'XXXX-XXXX-4589',
+      maskedAadhar: b.farmerAadhar || 'XXXX-XXXX-4589',
       district: b.district,
       mandiName: b.mandiCenterName,
       cropName: b.cropName,
-      estimatedYieldQuintals: b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 50,
-      netWeightQuintals: b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 50),
+      estimatedYieldQuintals: b.estimatedYieldQuintals || 50,
+      netWeightQuintals: b.netWeightQuintals || b.estimatedYieldQuintals || 50,
       moisturePercentage: b.moisturePct || 11.4,
       foreignMatterPercentage: b.foreignMatterPct || 0.65,
       totalPayoutRs: b.totalPayoutRs || 121250,
@@ -2294,15 +2294,15 @@ async function startServer() {
   app.get(['/api/v1/reports/export/csv', '/api/reports/export/csv'], (req, res) => {
     const rows = bookings.map((b) => [
       b.tokenNumber,
-      b.date,
+      b.scheduledDate,
       `"${(b.farmerName || '').replace(/"/g, '""')}"`,
       b.farmerPhone,
-      b.aadharNumber || 'XXXX-XXXX-4589',
+      b.farmerAadhar || 'XXXX-XXXX-4589',
       `"${(b.district || '').replace(/"/g, '""')}"`,
       `"${(b.mandiCenterName || '').replace(/"/g, '""')}"`,
       `"${(b.cropName || '').replace(/"/g, '""')}"`,
-      b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 50,
-      b.netWeightQuintals || (b.estimatedYieldKg ? b.estimatedYieldKg / 100 : 50),
+      b.estimatedYieldQuintals || 50,
+      b.netWeightQuintals || b.estimatedYieldQuintals || 50,
       b.moisturePct || 11.4,
       b.foreignMatterPct || 0.65,
       b.totalPayoutRs || 121250,

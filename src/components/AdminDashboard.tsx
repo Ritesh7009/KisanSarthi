@@ -49,6 +49,7 @@ import { translations } from '../i18n/translations';
 import { DISTRICT_PROCUREMENT_STATS, STANDARD_TIME_SLOTS } from '../data/mpMandiData';
 import { AdminSmsDispatchModal } from './AdminSmsDispatchModal';
 import { WeighbridgePaymentHub } from './WeighbridgePaymentHub';
+import { AdminReportsHub } from './AdminReportsHub';
 import { apiUrl, getAuthToken } from '../services/api';
 
 interface Props {
@@ -573,107 +574,7 @@ export const AdminDashboard: React.FC<Props> = ({
       {/* TAB 4: DISTRICT PROCUREMENT ANALYTICS & CHARTS */}
       {/* ========================================================= */}
       {adminTab === 'REPORTS' && (
-        <div className="space-y-5">
-          {/* Top Metric Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total State Procurement</p>
-              <p className="text-2xl font-black text-slate-900 font-mono mt-1">
-                63.3 <span className="text-xs font-sans text-slate-500">Lakh Qtl</span>
-              </p>
-              <p className="text-[10px] text-[#2D6A4F] font-bold mt-0.5">88.2% of target reached</p>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">DBT Direct Transfer</p>
-              <p className="text-2xl font-black text-[#1B4332] font-mono mt-1">
-                ₹1,682 <span className="text-xs font-sans text-slate-500">Cr</span>
-              </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Disbursed to bank accounts</p>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Benefited Farmers</p>
-              <p className="text-2xl font-black text-slate-900 font-mono mt-1">
-                3.65 <span className="text-xs font-sans text-slate-500">Lakh</span>
-              </p>
-              <p className="text-[10px] text-slate-500 mt-0.5">Registered on e-Uparjan</p>
-            </div>
-
-            <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs">
-              <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Avg Wait Time</p>
-              <p className="text-2xl font-black text-[#2D6A4F] font-mono mt-1">
-                24 <span className="text-xs font-sans text-slate-500">Mins</span>
-              </p>
-              <p className="text-[10px] text-[#2D6A4F] font-bold mt-0.5">Down from 4.2 hours</p>
-            </div>
-          </div>
-
-          {/* Charts Row */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            {/* District Wise Procurement vs Targets */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  District Procurement (Lakh Quintals)
-                </h4>
-                <span className="text-[10px] text-slate-400 font-mono">MP Mandi Board 2026</span>
-              </div>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={DISTRICT_PROCUREMENT_STATS}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="district" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `${(val / 100000).toFixed(1)}L`} />
-                    <Tooltip
-                      formatter={(val: number) => [`${(val / 100000).toFixed(2)} Lakh Quintals`, 'Volume']}
-                    />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Bar dataKey="totalProcuredQuintals" name="Procured" fill="#1B4332" radius={[6, 6, 0, 0]} />
-                    <Bar dataKey="targetQuintals" name="Target" fill="#D4E09B" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-
-            {/* Warehouse Storage Occupancy */}
-            <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs">
-              <div className="flex items-center justify-between mb-4">
-                <h4 className="text-xs font-bold text-slate-900 uppercase tracking-wider">
-                  Warehouse Storage Capacity & Occupancy (Qtl)
-                </h4>
-                <span className="text-[10px] text-slate-400 font-mono">Buffer Stock</span>
-              </div>
-              <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={DISTRICT_PROCUREMENT_STATS}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="district" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} tickFormatter={(val) => `${(val / 100000).toFixed(0)}L`} />
-                    <Tooltip />
-                    <Legend wrapperStyle={{ fontSize: '11px' }} />
-                    <Area
-                      type="monotone"
-                      dataKey="warehouseCapacityQuintals"
-                      name="Total Capacity"
-                      stroke="#1B4332"
-                      fill="#D4E09B"
-                      fillOpacity={0.4}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="warehouseOccupiedQuintals"
-                      name="Occupied Stock"
-                      stroke="#2D6A4F"
-                      fill="#2D6A4F"
-                      fillOpacity={0.2}
-                    />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
-          </div>
-        </div>
+        <AdminReportsHub mandis={mandis} crops={crops} />
       )}
 
       {/* ========================================================= */}
