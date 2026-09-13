@@ -1,0 +1,68 @@
+name: Complete Phase 4 Reporting
+
+on:
+  push:
+    branches:
+      - phase-4-reporting-complete
+
+permissions:
+  contents: write
+
+jobs:
+  complete-reporting:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Apply Phase 4 correctness fixes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          p=Path('backend/src/main/java/com/kisansarthi/report/ReportService.java')
+          s=p.read_text()
+          replacements=[
+          ('double targetQtl = target != null ? target.getTargetQuintals().doubleValue() : 500000.0;\n            double warehouseCapQtl = target != null ? target.getWarehouseCapacityQuintals().doubleValue() : (targetQtl * 1.2);','double targetQtl = target != null ? target.getTargetQuintals().doubleValue() : 0.0;\n            double warehouseCapQtl = target != null ? target.getWarehouseCapacityQuintals().doubleValue() : 0.0;'),
+          ('        long failedCount = 0;\n\n        BigDecimal totalSettledRs = BigDecimal.ZERO;','        long failedCount = 0;\n        BigDecimal settlementHoursSum = BigDecimal.ZERO;\n        long settlementHoursCount = 0;\n\n        BigDecimal totalSettledRs = BigDecimal.ZERO;'),
+          ('            if ("COMPLETED".equalsIgnoreCase(status)) {\n                completedCount++;\n                totalSettledRs = totalSettledRs.add(netAmount);','            if ("COMPLETED".equalsIgnoreCase(status)) {\n                completedCount++;\n                totalSettledRs = totalSettledRs.add(netAmount);\n                OffsetDateTime settlementStart = p.getInitiatedAt() != null ? p.getInitiatedAt() : p.getCreatedAt();\n                OffsetDateTime settlementEnd = p.getCreditedAt();\n                if (settlementStart != null && settlementEnd != null && !settlementEnd.isBefore(settlementStart)) {\n                    long seconds = Duration.between(settlementStart, settlementEnd).getSeconds();\n                    settlementHoursSum = settlementHoursSum.add(BigDecimal.valueOf(seconds).divide(BigDecimal.valueOf(3600), 4, RoundingMode.HALF_UP));\n                    settlementHoursCount++;\n                }'),
+          ('        dto.setAverageSettlementHours(4.2); // Typical PFMS clearing window','        dto.setAverageSettlementHours(settlementHoursCount == 0 ? 0.0 : settlementHoursSum.divide(BigDecimal.valueOf(settlementHoursCount), 2, RoundingMode.HALF_UP).doubleValue());'),
+          ('                    alert.setCompletedAt(p.getCreatedAt().toString());','                    alert.setCompletedAt(p.getCreditedAt() != null ? p.getCreditedAt().toString() : null);'),
+          ('    public List<TimeSeriesPointDto> getTimeSeries(int days) {\n        List<Booking> bookings = bookingRepository.findAll();','    public List<TimeSeriesPointDto> getTimeSeries(int days) {\n        if (days < 1 || days > 365) {\n            throw new IllegalArgumentException("days must be between 1 and 365");\n        }\n        List<Booking> bookings = bookingRepository.findAll();')]
+          for a,b in replacements:
+            if a not in s: raise SystemExit('missing ReportService pattern')
+            s=s.replace(a,b,1)
+          p.write_text(s)
+          p=Path('backend/src/main/java/com/kisansarthi/report/ReportController.java')
+          s=p.read_text()
+          a='''    public ResponseEntity<ApiResponse<PaymentAnalyticsReportDto>> getPaymentAnalytics(\n            @RequestParam(defaultValue = "24") long delaySlaHours\n    ) {\n        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaymentAnalytics(delaySlaHours)));\n    }'''
+          b='''    public ResponseEntity<ApiResponse<PaymentAnalyticsReportDto>> getPaymentAnalytics(\n            @RequestParam(defaultValue = "24") long delaySlaHours\n    ) {\n        if (delaySlaHours < 1 || delaySlaHours > 720) {\n            throw new IllegalArgumentException("delaySlaHours must be between 1 and 720");\n        }\n        return ResponseEntity.ok(ApiResponse.ok(reportService.getPaymentAnalytics(delaySlaHours)));\n    }'''
+          if a not in s: raise SystemExit('missing ReportController pattern')
+          p.write_text(s.replace(a,b,1))
+          p=Path('backend/src/test/java/com/kisansarthi/report/ReportServiceIntegrationTest.java')
+          s=p.read_text()
+          marker='''    @Test\n    @DisplayName("Verify time-series daily aggregation")'''
+          addition='''    @Test\n    @DisplayName("Verify time-series rejects unreasonable windows")\n    void testTimeSeriesWindowValidation() {\n        assertThrows(IllegalArgumentException.class, () -> reportService.getTimeSeries(0));\n        assertThrows(IllegalArgumentException.class, () -> reportService.getTimeSeries(366));\n    }\n\n'''
+          if marker not in s: raise SystemExit('missing test marker')
+          if 'Verify time-series rejects unreasonable windows' not in s: s=s.replace(marker,addition+marker,1)
+          p.write_text(s)
+          PY
+      - name: Run backend tests
+        run: mvn -f backend/pom.xml clean test
+      - name: Commit verified changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add backend/src/main/java/com/kisansarthi/report backend/src/test/java/com/kisansarthi/report
+          git commit -m 'fix(reporting): make analytics database-truthful'
+          git push
+      - name: Remove bootstrap workflow
+        run: |
+          git rm .github/workflows/phase4-complete.yml
+          git commit -m 'chore: remove phase 4 bootstrap workflow'
+          git push
