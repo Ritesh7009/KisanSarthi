@@ -144,15 +144,15 @@ public class BookingService {
         log.info("SLOT DEBUG: slotId={}, bookedQuintals={}, bookedFarmers={}", slot.getId(), slot.getBookedQuintals(), slot.getBookedFarmers());
 
         // 7. Concurrency Protection on Sequence: Lock sequence row for this Mandi and Date
-        int nextSeq;
-        synchronized (this) {
-            MandiTokenSequence sequence = sequenceRepository.findByMandiIdAndProcurementDateForUpdate(mandi.getId(), date)
-                    .orElseGet(() -> sequenceRepository.saveAndFlush(new MandiTokenSequence(mandi.getId(), date, 0)));
+        MandiTokenSequence sequence = sequenceRepository.findByMandiIdAndProcurementDateForUpdate(mandi.getId(), date)
+                .orElseGet(() -> {
+                    MandiTokenSequence newSeq = new MandiTokenSequence(mandi.getId(), date, 0);
+                    return sequenceRepository.saveAndFlush(newSeq);
+                });
 
-            nextSeq = sequence.getCurrentSequence() + 1;
-            sequence.setCurrentSequence(nextSeq);
-            sequenceRepository.saveAndFlush(sequence);
-        }
+        int nextSeq = sequence.getCurrentSequence() + 1;
+        sequence.setCurrentSequence(nextSeq);
+        sequenceRepository.saveAndFlush(sequence);
 
         // Format Official Token Number (e.g. MP-SEH-042)
         String distPrefix = (mandi.getDistrict() != null && mandi.getDistrict().trim().length() >= 3)
@@ -255,21 +255,17 @@ public class BookingService {
                     "Cannot cancel booking that has already progressed past procurement status: " + booking.getStatus());
         }
 
-        // 1. Release reserved capacity on slot
+        // 1. Release reserved capacity on slot (Failure MUST propagate and rollback the transaction)
         if (booking.getSlotId() != null || booking.getTimeSlot() != null) {
-            try {
-                MandiSlot slot = slotService.lockAndGetSlot(booking.getMandi().getId(), booking.getSlotId(), booking.getTimeSlot());
-                int reservedQty = (booking.getEstimatedYieldQuintals() != null)
-                        ? booking.getEstimatedYieldQuintals().setScale(0, RoundingMode.CEILING).intValue()
-                        : 0;
-                slot.setBookedQuintals(Math.max(0, slot.getBookedQuintals() - reservedQty));
-                slot.setBookedFarmers(Math.max(0, slot.getBookedFarmers() - 1));
-                slot.recalculateStatus();
-                slot = slotRepository.saveAndFlush(slot);
-                eventPublisher.publishAfterCommit(slot.getMandiId(), "SLOT_CAPACITY_CHANGED", slot);
-            } catch (Exception e) {
-                log.warn("Unable to release slot capacity for booking {}: {}", id, e.getMessage());
-            }
+            MandiSlot slot = slotService.lockAndGetSlot(booking.getMandi().getId(), booking.getSlotId(), booking.getTimeSlot());
+            int reservedQty = (booking.getEstimatedYieldQuintals() != null)
+                    ? booking.getEstimatedYieldQuintals().setScale(0, RoundingMode.CEILING).intValue()
+                    : 0;
+            slot.setBookedQuintals(Math.max(0, slot.getBookedQuintals() - reservedQty));
+            slot.setBookedFarmers(Math.max(0, slot.getBookedFarmers() - 1));
+            slot.recalculateStatus();
+            slot = slotRepository.saveAndFlush(slot);
+            eventPublisher.publishAfterCommit(slot.getMandiId(), "SLOT_CAPACITY_CHANGED", slot);
         }
 
         // 2. Decrement active waiting count if booking was waiting (do NOT decrement totalTokensToday)

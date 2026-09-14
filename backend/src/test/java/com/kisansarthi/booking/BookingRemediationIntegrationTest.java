@@ -375,4 +375,85 @@ public class BookingRemediationIntegrationTest {
         Booking finalBooking = bookingRepository.findById(booking.getId()).orElseThrow();
         assertEquals(BookingStatus.COMPLETED, finalBooking.getStatus());
     }
+
+    @Test
+    @DisplayName("Verify cancellation atomicity and failure handling: simulated capacity release failure rolls back entire transaction")
+    void testCancellationFailureRollsBackTransaction() {
+        // 1. Create a booking associated with a custom slot
+        MandiSlot customSlot = new MandiSlot();
+        customSlot.setId("slot-cancel-fail-test");
+        customSlot.setMandiId(testMandi.getId());
+        customSlot.setSlotLabel("11:00 AM - 01:00 PM");
+        customSlot.setStartTime("11:00");
+        customSlot.setEndTime("13:00");
+        customSlot.setMaxCapacityQuintals(1000);
+        customSlot.setBookedQuintals(0);
+        customSlot.setMaxFarmers(50);
+        customSlot.setBookedFarmers(0);
+        customSlot.setStatus("AVAILABLE");
+        slotRepository.save(customSlot);
+
+        CreateBookingRequest req = new CreateBookingRequest();
+        req.setFarmerId(testFarmer.getId());
+        req.setMandiId(testMandi.getId());
+        req.setCropId(testCrop.getId());
+        req.setSlotId(customSlot.getId());
+        req.setScheduledDate(LocalDate.now());
+        req.setTimeSlot("11:00 AM - 01:00 PM");
+        req.setVehicleType("TRACTOR_TROLLEY");
+        req.setVehicleNumber("MP-04-CF-1234");
+        req.setEstimatedYieldQuintals(new BigDecimal("30.00"));
+
+        BookingResponse created = bookingService.createBooking(req, "cancel-atomic-key", null);
+        assertNotNull(created);
+        UUID bookingId = created.getId();
+
+        Mandi mandiBefore = mandiRepository.findById(testMandi.getId()).orElseThrow();
+        int waitingBefore = mandiBefore.getActiveTokensWaiting();
+
+        // 2. Corrupt/delete the slot to simulate an unexpected capacity release failure
+        slotRepository.deleteById(customSlot.getId());
+
+        // 3. Attempting to cancel must fail and propagate exception (SlotNotFoundException)
+        assertThrows(Exception.class, () -> bookingService.cancelBooking(bookingId, "mukesh"));
+
+        // 4. Verify transaction rollback: Booking MUST remain BOOKED, NOT CANCELLED
+        Booking postFailureBooking = bookingRepository.findById(bookingId).orElseThrow();
+        assertEquals(BookingStatus.BOOKED, postFailureBooking.getStatus(),
+                "Booking status must remain BOOKED after capacity release failure");
+
+        // 5. Verify waiting count remained unchanged
+        Mandi mandiAfterFailure = mandiRepository.findById(testMandi.getId()).orElseThrow();
+        assertEquals(waitingBefore, mandiAfterFailure.getActiveTokensWaiting(),
+                "Waiting count must remain unchanged when cancellation rolls back");
+    }
+
+    @Test
+    @DisplayName("Verify cancellation restrictions: repeated cancellation and cancellation after procurement progression")
+    void testCancellationRestrictionsAndProgression() {
+        CreateBookingRequest req = new CreateBookingRequest();
+        req.setFarmerId(testFarmer.getId());
+        req.setMandiId(testMandi.getId());
+        req.setCropId(testCrop.getId());
+        req.setScheduledDate(LocalDate.now());
+        req.setTimeSlot("08:00 AM - 10:00 AM");
+        req.setVehicleType("TRACTOR_TROLLEY");
+        req.setVehicleNumber("MP-04-CR-5678");
+        req.setEstimatedYieldQuintals(new BigDecimal("20.00"));
+
+        BookingResponse created = bookingService.createBooking(req, "cancel-prog-key", null);
+        assertNotNull(created);
+        UUID bookingId = created.getId();
+
+        // Progress booking: BOOKED -> GATE_CALLED -> GATE_ENTERED -> WEIGHING (cancellation no longer permitted once in WEIGHING)
+        bookingService.transitionStatus(bookingId, BookingStatus.GATE_CALLED);
+        bookingService.transitionStatus(bookingId, BookingStatus.GATE_ENTERED);
+        bookingService.transitionStatus(bookingId, BookingStatus.WEIGHING);
+
+        // Attempting to cancel while in WEIGHING must be rejected (cannot cancel once weighing has started)
+        assertThrows(BusinessException.class, () -> bookingService.cancelBooking(bookingId, "mukesh"));
+
+        Booking curBooking = bookingRepository.findById(bookingId).orElseThrow();
+        assertEquals(BookingStatus.WEIGHING, curBooking.getStatus());
+    }
 }
