@@ -48,9 +48,18 @@ public class FarmerService {
     }
 
     public List<FarmerDto> getAllFarmers() {
-        return farmerRepository.findAll().stream()
-                .map(FarmerDto::fromEntity)
-                .collect(Collectors.toList());
+        return getFarmersPaginated(null, 0, 100).getContent();
+    }
+
+    public org.springframework.data.domain.Page<FarmerDto> getFarmersPaginated(String district, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 100)); // Enforce maximum page size of 100
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                safePage, safeSize, org.springframework.data.domain.Sort.by("createdAt").descending().and(org.springframework.data.domain.Sort.by("id").descending())
+        );
+
+        return farmerRepository.findAllWithOptionalDistrict(district, pageable)
+                .map(FarmerDto::fromEntity);
     }
 
     public Farmer getFarmerEntityById(UUID farmerId) {

@@ -304,10 +304,21 @@ public class BookingService {
     }
 
     public List<BookingResponse> getAllBookings(String mandiId) {
-        List<Booking> list = (mandiId != null && !mandiId.isBlank())
-                ? bookingRepository.findByMandiIdOrderByCreatedAtDesc(mandiId)
-                : bookingRepository.findAll();
-        return list.stream().map(BookingResponse::fromEntity).collect(Collectors.toList());
+        return getBookingsPaginated(mandiId, 0, 100).getContent();
+    }
+
+    public org.springframework.data.domain.Page<BookingResponse> getBookingsPaginated(String mandiId, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 100)); // Enforce maximum page size of 100
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                safePage, safeSize, org.springframework.data.domain.Sort.by("createdAt").descending().and(org.springframework.data.domain.Sort.by("id").descending())
+        );
+
+        org.springframework.data.domain.Page<Booking> pageResult = (mandiId != null && !mandiId.isBlank())
+                ? bookingRepository.findByMandiId(mandiId.trim(), pageable)
+                : bookingRepository.findAll(pageable);
+
+        return pageResult.map(BookingResponse::fromEntity);
     }
 
     public BookingResponse getBookingById(UUID id) {

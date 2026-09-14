@@ -60,8 +60,20 @@ public class BookingController {
     public ResponseEntity<ApiResponse<List<BookingResponse>>> getAllBookings(
             @RequestParam(value = "mandiId", required = false) String mandiId
     ) {
-        List<BookingResponse> bookings = bookingService.getAllBookings(mandiId);
+        List<BookingResponse> bookings = bookingService.getBookingsPaginated(mandiId, 0, 100).getContent();
         return ResponseEntity.ok(ApiResponse.ok(bookings));
+    }
+
+    @GetMapping("/paginated")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANDI_OPERATOR', 'MANDI_MANAGER', 'DISTRICT_OFFICER')")
+    @Operation(summary = "List bookings with server-side pagination and optional mandi filter")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<BookingResponse>>> getBookingsPaginated(
+            @RequestParam(value = "mandiId", required = false) String mandiId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        org.springframework.data.domain.Page<BookingResponse> paginated = bookingService.getBookingsPaginated(mandiId, page, size);
+        return ResponseEntity.ok(ApiResponse.ok(paginated));
     }
 
     @PatchMapping("/{id}/status")

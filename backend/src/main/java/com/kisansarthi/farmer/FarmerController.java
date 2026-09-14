@@ -38,7 +38,20 @@ public class FarmerController {
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'MANDI_OPERATOR', 'MANDI_MANAGER', 'DISTRICT_OFFICER')")
     @Operation(summary = "List all farmers (Administrative)")
-    public ResponseEntity<ApiResponse<List<FarmerDto>>> getAllFarmers() {
-        return ResponseEntity.ok(ApiResponse.ok(farmerService.getAllFarmers()));
+    public ResponseEntity<ApiResponse<List<FarmerDto>>> getAllFarmers(
+            @RequestParam(required = false) String district
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(farmerService.getFarmersPaginated(district, 0, 100).getContent()));
+    }
+
+    @GetMapping("/paginated")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANDI_OPERATOR', 'MANDI_MANAGER', 'DISTRICT_OFFICER')")
+    @Operation(summary = "List farmers with server-side pagination and optional district filter")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<FarmerDto>>> getFarmersPaginated(
+            @RequestParam(required = false) String district,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
+    ) {
+        return ResponseEntity.ok(ApiResponse.ok(farmerService.getFarmersPaginated(district, page, size)));
     }
 }

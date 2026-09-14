@@ -20,7 +20,8 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByTokenNumber(String tokenNumber);
     List<Booking> findByFarmerIdOrderByCreatedAtDesc(UUID farmerId);
     List<Booking> findByMandiIdAndScheduledDateOrderByTokenSequenceAsc(String mandiId, LocalDate date);
-    List<Booking> findByMandiIdOrderByCreatedAtDesc(String mandiId);
+    Page<Booking> findByMandiId(String mandiId, Pageable pageable);
+    Page<Booking> findAll(Pageable pageable);
     List<Booking> findByMandiIdAndStatus(String mandiId, BookingStatus status);
 
     // ==========================================
