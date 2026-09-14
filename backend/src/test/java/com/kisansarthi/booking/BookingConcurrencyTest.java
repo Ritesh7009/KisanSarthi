@@ -103,7 +103,6 @@ public class BookingConcurrencyTest {
     @BeforeEach
     void setUp() {
         cleanTestData();
-        sequenceRepository.save(new MandiTokenSequence("mandi-sehore-test", LocalDate.now(), 0));
 
         // Ensure test mandi exists
         if (!mandiRepository.existsById("mandi-sehore-test")) {
@@ -515,5 +514,207 @@ public class BookingConcurrencyTest {
 
         assertThrows(SlotClosedException.class, () ->
                 bookingService.createBooking(closedSlotReq, "closed-slot-key", null));
+    }
+
+    @Test
+    @DisplayName("Test A — Existing sequence row: start at sequence 10, verify concurrent requests produce 11..30 with no duplicates")
+    void testExistingSequenceRowConcurrency() throws InterruptedException {
+        LocalDate testDate = LocalDate.now().plusDays(5);
+        // Pre-initialize sequence row to 10
+        MandiTokenSequence existingSeq = new MandiTokenSequence(testMandi.getId(), testDate, 10);
+        sequenceRepository.saveAndFlush(existingSeq);
+
+        int threadCount = 20;
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch finishLatch = new CountDownLatch(threadCount);
+
+        List<BookingResponse> responses = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int index = i;
+            final Farmer farmer = testFarmers.get(index);
+            final String idempotencyKey = "existing-seq-key-" + UUID.randomUUID();
+
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    CreateBookingRequest req = new CreateBookingRequest();
+                    req.setFarmerId(farmer.getId());
+                    req.setMandiId(testMandi.getId());
+                    req.setCropId(testCrop.getId());
+                    req.setScheduledDate(testDate);
+                    req.setTimeSlot("08:00 AM - 10:00 AM");
+                    req.setVehicleType("TRACTOR_TROLLEY");
+                    req.setVehicleNumber(String.format("MP-04-EX-%04d", index + 1));
+                    req.setEstimatedYieldQuintals(new BigDecimal("20.00"));
+
+                    BookingResponse res = bookingService.createBooking(req, idempotencyKey, null);
+                    responses.add(res);
+                } catch (Exception e) {
+                    failureCount.incrementAndGet();
+                } finally {
+                    finishLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        boolean completed = finishLatch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertTrue(completed, "All 20 concurrent requests should complete within 30 seconds");
+        assertEquals(0, failureCount.get(), "Zero booking creations should fail");
+        assertEquals(20, responses.size(), "Exactly 20 responses must be returned");
+
+        // Verify sequences are strictly 11 through 30
+        List<Integer> seqNumbers = responses.stream()
+                .map(BookingResponse::getTokenSequence)
+                .sorted()
+                .toList();
+        for (int i = 0; i < 20; i++) {
+            assertEquals(11 + i, seqNumbers.get(i), "Sequence at index " + i + " must be " + (11 + i));
+        }
+
+        // Verify token numbers are unique
+        Set<String> uniqueTokens = new HashSet<>();
+        for (BookingResponse r : responses) {
+            assertTrue(uniqueTokens.add(r.getTokenNumber()), "Duplicate token number found: " + r.getTokenNumber());
+        }
+        assertEquals(20, uniqueTokens.size());
+
+        // Verify database sequence state is exactly 30
+        MandiTokenSequence finalSeq = sequenceRepository.findByMandiIdAndProcurementDate(testMandi.getId(), testDate)
+                .orElseThrow();
+        assertEquals(30, finalSeq.getCurrentSequence());
+    }
+
+    @Test
+    @DisplayName("Test B — First-ever sequence row: start with NO sequence row in DB, verify concurrent creation produces unique 1..25 sequences and exactly 1 sequence row")
+    void testFirstTimeSequenceInitializationConcurrency() throws InterruptedException {
+        LocalDate firstTimeDate = LocalDate.now().plusDays(10);
+        // Ensure absolutely no sequence row exists
+        assertFalse(sequenceRepository.findByMandiIdAndProcurementDate(testMandi.getId(), firstTimeDate).isPresent());
+
+        int threadCount = 25;
+        ExecutorService executor = Executors.newFixedThreadPool(10);
+        CountDownLatch startLatch = new CountDownLatch(1);
+        CountDownLatch finishLatch = new CountDownLatch(threadCount);
+
+        List<BookingResponse> responses = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger failureCount = new AtomicInteger(0);
+
+        for (int i = 0; i < threadCount; i++) {
+            final int index = i;
+            final Farmer farmer = testFarmers.get(index);
+            final String idempotencyKey = "first-time-seq-key-" + UUID.randomUUID();
+
+            executor.submit(() -> {
+                try {
+                    startLatch.await();
+                    CreateBookingRequest req = new CreateBookingRequest();
+                    req.setFarmerId(farmer.getId());
+                    req.setMandiId(testMandi.getId());
+                    req.setCropId(testCrop.getId());
+                    req.setScheduledDate(firstTimeDate);
+                    req.setTimeSlot("08:00 AM - 10:00 AM");
+                    req.setVehicleType("TRACTOR_TROLLEY");
+                    req.setVehicleNumber(String.format("MP-04-FT-%04d", index + 1));
+                    req.setEstimatedYieldQuintals(new BigDecimal("15.00"));
+
+                    BookingResponse res = bookingService.createBooking(req, idempotencyKey, null);
+                    responses.add(res);
+                } catch (Exception e) {
+                    failureCount.incrementAndGet();
+                } finally {
+                    finishLatch.countDown();
+                }
+            });
+        }
+
+        startLatch.countDown();
+        boolean completed = finishLatch.await(30, TimeUnit.SECONDS);
+        executor.shutdown();
+
+        assertTrue(completed, "All 25 concurrent requests should complete within 30 seconds");
+        assertEquals(0, failureCount.get(), "Zero booking creations should fail during initial sequence creation");
+        assertEquals(25, responses.size(), "Exactly 25 responses must be returned");
+
+        // Verify exactly one sequence row exists for this mandi + date
+        MandiTokenSequence createdSeq = sequenceRepository.findByMandiIdAndProcurementDate(testMandi.getId(), firstTimeDate)
+                .orElseThrow();
+        assertEquals(25, createdSeq.getCurrentSequence(), "Final sequence value in DB must be exactly 25");
+
+        // Verify sequences are strictly 1 through 25 with no duplicates
+        List<Integer> seqNumbers = responses.stream()
+                .map(BookingResponse::getTokenSequence)
+                .sorted()
+                .toList();
+        for (int i = 0; i < 25; i++) {
+            assertEquals(i + 1, seqNumbers.get(i), "Sequence at index " + i + " must be strictly " + (i + 1));
+        }
+
+        // Verify token numbers are unique
+        Set<String> uniqueTokens = new HashSet<>();
+        for (BookingResponse r : responses) {
+            assertTrue(uniqueTokens.add(r.getTokenNumber()), "Duplicate token number found: " + r.getTokenNumber());
+        }
+        assertEquals(25, uniqueTokens.size());
+    }
+
+    @Test
+    @DisplayName("Test C — Transaction rollback does not corrupt sequence state and subsequent transactions succeed")
+    void testFailedTransactionDoesNotCorruptSequence() {
+        LocalDate rollbackDate = LocalDate.now().plusDays(15);
+
+        // 1. First transaction succeeds from clean state (sequence 1)
+        CreateBookingRequest req1 = new CreateBookingRequest();
+        req1.setFarmerId(testFarmers.get(0).getId());
+        req1.setMandiId(testMandi.getId());
+        req1.setCropId(testCrop.getId());
+        req1.setScheduledDate(rollbackDate);
+        req1.setTimeSlot("08:00 AM - 10:00 AM");
+        req1.setVehicleType("TRACTOR_TROLLEY");
+        req1.setVehicleNumber("MP-04-RB-0001");
+        req1.setEstimatedYieldQuintals(new BigDecimal("10.00"));
+
+        BookingResponse res1 = bookingService.createBooking(req1, "rb-key-1", null);
+        assertNotNull(res1);
+        assertEquals(1, res1.getTokenSequence());
+
+        // 2. Second transaction fails due to invalid crop ID -> rolls back
+        CreateBookingRequest reqFail = new CreateBookingRequest();
+        reqFail.setFarmerId(testFarmers.get(1).getId());
+        reqFail.setMandiId(testMandi.getId());
+        reqFail.setCropId("non-existent-crop-id");
+        reqFail.setScheduledDate(rollbackDate);
+        reqFail.setTimeSlot("08:00 AM - 10:00 AM");
+        reqFail.setVehicleType("TRACTOR_TROLLEY");
+        reqFail.setVehicleNumber("MP-04-RB-0002");
+        reqFail.setEstimatedYieldQuintals(new BigDecimal("10.00"));
+
+        assertThrows(ResourceNotFoundException.class, () ->
+                bookingService.createBooking(reqFail, "rb-key-fail", null));
+
+        // 3. Third transaction succeeds -> should cleanly acquire sequence 2
+        CreateBookingRequest req3 = new CreateBookingRequest();
+        req3.setFarmerId(testFarmers.get(2).getId());
+        req3.setMandiId(testMandi.getId());
+        req3.setCropId(testCrop.getId());
+        req3.setScheduledDate(rollbackDate);
+        req3.setTimeSlot("08:00 AM - 10:00 AM");
+        req3.setVehicleType("TRACTOR_TROLLEY");
+        req3.setVehicleNumber("MP-04-RB-0003");
+        req3.setEstimatedYieldQuintals(new BigDecimal("10.00"));
+
+        BookingResponse res3 = bookingService.createBooking(req3, "rb-key-3", null);
+        assertNotNull(res3);
+        assertEquals(2, res3.getTokenSequence());
+
+        // Verify DB sequence state is exactly 2
+        MandiTokenSequence finalSeq = sequenceRepository.findByMandiIdAndProcurementDate(testMandi.getId(), rollbackDate)
+                .orElseThrow();
+        assertEquals(2, finalSeq.getCurrentSequence());
     }
 }

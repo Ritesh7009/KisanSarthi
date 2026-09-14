@@ -1,6 +1,8 @@
 package com.kisansarthi.mandi;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -8,12 +10,17 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface MandiRepository extends JpaRepository<Mandi, String> {
     List<Mandi> findByDistrictIgnoreCase(String district);
 
     long countByGateStatusIgnoreCase(String gateStatus);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM Mandi m WHERE m.id = :id")
+    Optional<Mandi> findByIdForUpdate(@Param("id") String id);
 
     @Transactional
     @Modifying(clearAutomatically = true)

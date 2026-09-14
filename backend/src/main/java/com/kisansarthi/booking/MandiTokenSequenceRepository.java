@@ -13,6 +13,11 @@ import java.util.Optional;
 @Repository
 public interface MandiTokenSequenceRepository extends JpaRepository<MandiTokenSequence, MandiTokenSequence.TokenSequenceId> {
 
+    @Query("SELECT s FROM MandiTokenSequence s WHERE s.mandiId = :mandiId AND s.procurementDate = :date")
+    Optional<MandiTokenSequence> findByMandiIdAndProcurementDate(
+            @Param("mandiId") String mandiId,
+            @Param("date") LocalDate date);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT s FROM MandiTokenSequence s WHERE s.mandiId = :mandiId AND s.procurementDate = :date")
     Optional<MandiTokenSequence> findByMandiIdAndProcurementDateForUpdate(

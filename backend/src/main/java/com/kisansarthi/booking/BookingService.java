@@ -108,8 +108,8 @@ public class BookingService {
                     .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found for user: " + authenticatedUsername));
         }
 
-        // 5. Resolve Mandi and Crop
-        Mandi mandi = mandiRepository.findById(request.getMandiId())
+        // 5. Resolve Mandi and Crop (Acquires pessimistic write lock on Mandi row to serialize first-time sequence initialization across concurrent instances)
+        Mandi mandi = mandiRepository.findByIdForUpdate(request.getMandiId())
                 .orElseThrow(() -> new ResourceNotFoundException("Mandi not found: " + request.getMandiId()));
         Crop crop = cropRepository.findById(request.getCropId())
                 .orElseThrow(() -> new ResourceNotFoundException("Crop not found: " + request.getCropId()));
