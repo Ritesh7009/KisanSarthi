@@ -96,17 +96,34 @@ public class BookingService {
         }
         int requestedQty = yield.setScale(0, RoundingMode.CEILING).intValue();
 
-        // 4. Resolve Farmer
+        // 4. Resolve Farmer with Impersonation Protection
         Farmer farmer;
-        if (request.getFarmerId() != null) {
+        if (authenticatedUsername != null && !authenticatedUsername.isBlank()) {
+            User user = userRepository.findByUsername(authenticatedUsername).orElse(null);
+            if (user != null && user.getRole() == com.kisansarthi.auth.Role.ROLE_FARMER) {
+                farmer = farmerRepository.findByUserId(user.getId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found for user: " + authenticatedUsername));
+                if (request.getFarmerId() != null && !farmer.getId().equals(request.getFarmerId())) {
+                    throw new org.springframework.security.access.AccessDeniedException("Access denied: You are only authorized to create bookings for your own farmer profile");
+                }
+            } else if (request.getFarmerId() != null) {
+                farmer = farmerRepository.findById(request.getFarmerId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Farmer not found: " + request.getFarmerId()));
+            } else if (user != null) {
+                farmer = farmerRepository.findByUserId(user.getId())
+                        .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found for user: " + authenticatedUsername));
+            } else {
+                throw new ResourceNotFoundException("Farmer not found");
+            }
+        } else if (request.getFarmerId() != null) {
             farmer = farmerRepository.findById(request.getFarmerId())
                     .orElseThrow(() -> new ResourceNotFoundException("Farmer not found: " + request.getFarmerId()));
         } else {
-            User user = userRepository.findByUsername(authenticatedUsername)
-                    .orElseThrow(() -> new ResourceNotFoundException("Authenticated user not found: " + authenticatedUsername));
-            farmer = farmerRepository.findByUserId(user.getId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found for user: " + authenticatedUsername));
+            throw new BusinessException("FARMER_REQUIRED", "Farmer ID or authenticated session is required to create a booking");
         }
+
+        // Authorize Mandi Access for Mandi Operators / Managers
+        authorizationService.verifyMandiAccess(request.getMandiId());
 
         // 5. Resolve Mandi and Crop (Acquires pessimistic write lock on Mandi row to serialize first-time sequence initialization across concurrent instances)
         Mandi mandi = mandiRepository.findByIdForUpdate(request.getMandiId())
@@ -213,6 +230,8 @@ public class BookingService {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + id));
 
+        authorizationService.verifyBookingAccess(booking);
+
         BookingStatus current = booking.getStatus();
         if (!current.canTransitionTo(targetStatus)) {
             throw new InvalidStateTransitionException(current.name(), targetStatus.name());
@@ -245,6 +264,8 @@ public class BookingService {
     public BookingResponse cancelBooking(UUID id, String username) {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + id));
+
+        authorizationService.verifyBookingCancellation(booking, username);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BookingAlreadyCancelledException("Booking has already been cancelled: " + id);
@@ -322,10 +343,12 @@ public class BookingService {
         return getBookingsByFarmer(username, 0, 100).getContent();
     }
 
+    @Transactional(readOnly = true)
     public List<BookingResponse> getAllBookings(String mandiId) {
         return getBookingsPaginated(mandiId, 0, 100).getContent();
     }
 
+    @Transactional(readOnly = true)
     public org.springframework.data.domain.Page<BookingResponse> getBookingsPaginated(String mandiId, int page, int size) {
         String authoritativeDistrict = authorizationService.resolveAndAuthorizeDistrict(null);
         if (mandiId != null && !mandiId.isBlank()) {
@@ -350,12 +373,11 @@ public class BookingService {
         return pageResult.map(BookingResponse::fromEntity);
     }
 
+    @Transactional(readOnly = true)
     public BookingResponse getBookingById(UUID id) {
         Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + id));
-        if (booking.getMandi() != null) {
-            authorizationService.verifyDistrictAccess(booking.getMandi().getDistrict());
-        }
+        authorizationService.verifyBookingAccess(booking);
         return BookingResponse.fromEntity(booking);
     }
 }

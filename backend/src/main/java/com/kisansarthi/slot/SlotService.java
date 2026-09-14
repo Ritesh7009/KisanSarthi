@@ -1,5 +1,6 @@
 package com.kisansarthi.slot;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.common.CapacityReductionNotAllowedException;
 import com.kisansarthi.common.SlotNotFoundException;
 import org.slf4j.Logger;
@@ -18,10 +19,16 @@ public class SlotService {
 
     private final SlotRepository slotRepository;
     private final SlotEventPublisher eventPublisher;
+    private final SecurityAuthorizationService authorizationService;
 
-    public SlotService(SlotRepository slotRepository, SlotEventPublisher eventPublisher) {
+    public SlotService(
+            SlotRepository slotRepository,
+            SlotEventPublisher eventPublisher,
+            SecurityAuthorizationService authorizationService
+    ) {
         this.slotRepository = slotRepository;
         this.eventPublisher = eventPublisher;
+        this.authorizationService = authorizationService;
     }
 
     public List<MandiSlot> getSlotsByMandiId(String mandiId) {
@@ -76,6 +83,7 @@ public class SlotService {
 
     @Transactional
     public MandiSlot createSlot(String mandiId, MandiSlot slot) {
+        authorizationService.verifyMandiAccess(mandiId);
         if (slot.getId() == null || slot.getId().isBlank()) {
             slot.setId("slot-" + mandiId + "-" + System.currentTimeMillis());
         }
@@ -94,6 +102,8 @@ public class SlotService {
     public MandiSlot updateSlot(String id, MandiSlot update) {
         MandiSlot existing = slotRepository.findByIdForUpdate(id)
                 .orElseThrow(() -> new SlotNotFoundException("Slot not found: " + id));
+
+        authorizationService.verifyMandiAccess(existing.getMandiId());
 
         // Capacity reduction check: cannot reduce max below currently booked amounts
         if (update.getMaxCapacityQuintals() > 0 && update.getMaxCapacityQuintals() < existing.getBookedQuintals()) {

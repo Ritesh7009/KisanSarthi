@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="5.393" tests="10" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="4.224" tests="8" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -44,7 +44,7 @@
     <property name="localRepository" value="/root/.m2/repository"/>
     <property name="java.vendor.url.bug" value="https://bugs.launchpad.net/ubuntu/+source/openjdk-21"/>
     <property name="java.io.tmpdir" value="/tmp"/>
-    <property name="com.zaxxer.hikari.pool_number" value="3"/>
+    <property name="com.zaxxer.hikari.pool_number" value="6"/>
     <property name="java.version" value="21.0.12"/>
     <property name="user.dir" value="/app/applet/backend"/>
     <property name="os.arch" value="amd64"/>
@@ -61,10 +61,10 @@
     <property name="java.class.version" value="65.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[kisansarthi-backend] "/>
   </properties>
-  <testcase name="testDistrictOfficer_farmers_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.509">
-    <system-out><![CDATA[2026-09-14T13:00:19.902Z  INFO 11098 --- [kisansarthi-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.kisansarthi.report.DistrictAuthorizationIntegrationTest]: DistrictAuthorizationIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-2026-09-14T13:00:19.971Z  INFO 11098 --- [kisansarthi-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.kisansarthi.KisanSarthiApplication for test class com.kisansarthi.report.DistrictAuthorizationIntegrationTest
-2026-09-14T13:00:19.976Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.b.d.r.RestartApplicationListener     : Restart disabled due to context in which it is running
+  <testcase name="testOperatorCannotModifyOtherMandiBooking" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.142">
+    <system-out><![CDATA[2026-09-14T13:00:33.877Z  INFO 11098 --- [kisansarthi-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.kisansarthi.security.SecurityRegressionIntegrationTest]: SecurityRegressionIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-09-14T13:00:33.887Z  INFO 11098 --- [kisansarthi-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.kisansarthi.KisanSarthiApplication for test class com.kisansarthi.security.SecurityRegressionIntegrationTest
+2026-09-14T13:00:33.893Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.b.d.r.RestartApplicationListener     : Restart disabled due to context in which it is running
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -75,7 +75,7 @@
 
  :: Spring Boot ::                (v3.3.4)
 
-2026-09-14T13:00:20.002Z  WARN 11098 --- [kisansarthi-backend] [           main] ory$DuplicateJsonObjectContextCustomizer : 
+2026-09-14T13:00:33.962Z  WARN 11098 --- [kisansarthi-backend] [           main] ory$DuplicateJsonObjectContextCustomizer : 
 
 Found multiple occurrences of org.json.JSONObject on the class path:
 
@@ -84,63 +84,89 @@ Found multiple occurrences of org.json.JSONObject on the class path:
 
 You may wish to exclude one of them to ensure predictable runtime behavior
 
-2026-09-14T13:00:20.050Z  INFO 11098 --- [kisansarthi-backend] [           main] k.r.DistrictAuthorizationIntegrationTest : Starting DistrictAuthorizationIntegrationTest using Java 21.0.12 with PID 11098 (started by root in /app/applet/backend)
-2026-09-14T13:00:20.050Z  INFO 11098 --- [kisansarthi-backend] [           main] k.r.DistrictAuthorizationIntegrationTest : The following 1 profile is active: "test"
-2026-09-14T13:00:20.626Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
-2026-09-14T13:00:20.627Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-09-14T13:00:20.671Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 44 ms. Found 14 JPA repository interfaces.
-2026-09-14T13:00:20.924Z  INFO 11098 --- [kisansarthi-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-09-14T13:00:20.951Z  INFO 11098 --- [kisansarthi-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-09-14T13:00:20.961Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-09-14T13:00:20.962Z  INFO 11098 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Starting...
-2026-09-14T13:00:20.965Z  INFO 11098 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-3 - Added connection conn20: url=jdbc:h2:mem:kisansarthi_auth_test user=SA
-2026-09-14T13:00:20.965Z  INFO 11098 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Start completed.
-2026-09-14T13:00:20.965Z  WARN 11098 --- [kisansarthi-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-09-14T13:00:21.358Z  INFO 11098 --- [kisansarthi-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-09-14T13:00:21.384Z  INFO 11098 --- [kisansarthi-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-09-14T13:00:22.475Z  WARN 11098 --- [kisansarthi-backend] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-09-14T13:00:22.499Z  WARN 11098 --- [kisansarthi-backend] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
+2026-09-14T13:00:33.964Z  INFO 11098 --- [kisansarthi-backend] [           main] c.k.s.SecurityRegressionIntegrationTest  : Starting SecurityRegressionIntegrationTest using Java 21.0.12 with PID 11098 (started by root in /app/applet/backend)
+2026-09-14T13:00:33.964Z  INFO 11098 --- [kisansarthi-backend] [           main] c.k.s.SecurityRegressionIntegrationTest  : The following 1 profile is active: "test"
+2026-09-14T13:00:34.524Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-14T13:00:34.524Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-09-14T13:00:34.568Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 43 ms. Found 14 JPA repository interfaces.
+2026-09-14T13:00:34.788Z  INFO 11098 --- [kisansarthi-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-09-14T13:00:34.791Z  INFO 11098 --- [kisansarthi-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-09-14T13:00:34.802Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-09-14T13:00:34.803Z  INFO 11098 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Starting...
+2026-09-14T13:00:34.807Z  INFO 11098 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-6 - Added connection conn50: url=jdbc:h2:mem:kisansarthi_security_reg_test user=SA
+2026-09-14T13:00:34.807Z  INFO 11098 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-6 - Start completed.
+2026-09-14T13:00:34.808Z  WARN 11098 --- [kisansarthi-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-09-14T13:00:35.115Z  INFO 11098 --- [kisansarthi-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-09-14T13:00:35.170Z  INFO 11098 --- [kisansarthi-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-09-14T13:00:36.086Z  WARN 11098 --- [kisansarthi-backend] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-09-14T13:00:36.110Z  WARN 11098 --- [kisansarthi-backend] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
 
-Using generated security password: a943b9e2-1bd8-4316-9286-e31845b836a3
+Using generated security password: 999fd7e2-2db3-400c-9082-0260d86170ee
 
 This generated password is for development use only. Your security configuration must be updated before running your application in production.
 
-2026-09-14T13:00:22.502Z  INFO 11098 --- [kisansarthi-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
-2026-09-14T13:00:22.963Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
-2026-09-14T13:00:23.951Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
-2026-09-14T13:00:23.952Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
-2026-09-14T13:00:23.955Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 3 ms
-2026-09-14T13:00:23.982Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
-2026-09-14T13:00:23.982Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@51b4026a]]
-2026-09-14T13:00:23.983Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
-2026-09-14T13:00:23.989Z  INFO 11098 --- [kisansarthi-backend] [           main] k.r.DistrictAuthorizationIntegrationTest : Started DistrictAuthorizationIntegrationTest in 4.014 seconds (process running for 49.729)
-2026-09-14T13:00:24.396Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_aa25d311 assigned to [Sehore] attempted to access district [Ujjain]
-2026-09-14T13:00:24.399Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+2026-09-14T13:00:36.113Z  INFO 11098 --- [kisansarthi-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
+2026-09-14T13:00:36.656Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-09-14T13:00:37.520Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
+2026-09-14T13:00:37.521Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@139a81eb]]
+2026-09-14T13:00:37.522Z  INFO 11098 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
+2026-09-14T13:00:37.527Z  INFO 11098 --- [kisansarthi-backend] [           main] c.k.s.SecurityRegressionIntegrationTest  : Started SecurityRegressionIntegrationTest in 3.635 seconds (process running for 63.267)
+2026-09-14T13:00:37.655Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : SLOT DEBUG: slotId=slot-b-ea762b, bookedQuintals=50, bookedFarmers=1
+2026-09-14T13:00:37.670Z  INFO 11098 --- [kisansarthi-backend] [           main] .s.a.AnnotationAsyncExecutionInterceptor : More than one TaskExecutor bean found within the context, and none is named 'taskExecutor'. Mark one of them as primary or name it 'taskExecutor' (possibly as an alias) in order to use it for async processing: [clientInboundChannelExecutor, clientOutboundChannelExecutor, brokerChannelExecutor]
+2026-09-14T13:00:37.671Z  INFO 11098 --- [kisansarthi-backend] [cTaskExecutor-1] com.kisansarthi.sms.TwilioSmsProvider    : [Twilio] Trial mode explicitly configured via property: true
+2026-09-14T13:00:37.671Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-1] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826022222: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
+2026-09-14T13:00:37.672Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : Official Token MP-IND-001 successfully generated and committed for farmer 9826022222 at mandi mandi-indore-sec-18e895 in slot 10:00 AM - 12:00 PM
+2026-09-14T13:00:37.680Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CREATED] for mandi [mandi-indore-sec-18e895] post-commit
+2026-09-14T13:00:37.682Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-indore-sec-18e895] post-commit
+2026-09-14T13:00:37.690Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: Mandi scoped user op_sehore assigned to [mandi-sehore-sec-8c84ba] attempted to access mandi [mandi-indore-sec-18e895]
 ]]></system-out>
   </testcase>
-  <testcase name="testDistrictOfficer_bookingById_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.163">
-    <system-out><![CDATA[2026-09-14T13:00:24.664Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_dc00d0ac attempted to access resource in district [Ujjain] but is assigned to [Sehore]
-2026-09-14T13:00:24.666Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access resources in district: Sehore
+  <testcase name="testInvalidStateTransitionsFail" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.09">
+    <system-out><![CDATA[2026-09-14T13:00:37.752Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : SLOT DEBUG: slotId=slot-a-e2fdcf, bookedQuintals=35, bookedFarmers=1
+2026-09-14T13:00:37.759Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : Official Token MP-SEH-001 successfully generated and committed for farmer 9826011111 at mandi mandi-sehore-sec-c06374 in slot 08:00 AM - 10:00 AM
+2026-09-14T13:00:37.759Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-2] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826011111: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
+2026-09-14T13:00:37.760Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CREATED] for mandi [mandi-sehore-sec-c06374] post-commit
+2026-09-14T13:00:37.760Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-sehore-sec-c06374] post-commit
+2026-09-14T13:00:37.775Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-3] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826011111: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
+2026-09-14T13:00:37.777Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-sehore-sec-c06374] post-commit
+2026-09-14T13:00:37.777Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CANCELLED] for mandi [mandi-sehore-sec-c06374] post-commit
 ]]></system-out>
   </testcase>
-  <testcase name="testDistrictOfficer_districtStats_scopedToAssignedDistrict" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.112"/>
-  <testcase name="testDistrictOfficer_bottlenecks_scopedToAssignedDistrict" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.103"/>
-  <testcase name="testDistrictOfficer_procurementRegister_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.086">
-    <system-out><![CDATA[2026-09-14T13:00:24.972Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_e17eeef2 assigned to [Sehore] attempted to access district [Ujjain]
-2026-09-14T13:00:24.972Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+  <testcase name="testFarmerCannotCancelOtherFarmerBooking" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.075">
+    <system-out><![CDATA[2026-09-14T13:00:37.811Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : SLOT DEBUG: slotId=slot-b-536cd3, bookedQuintals=40, bookedFarmers=1
+2026-09-14T13:00:37.817Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : Official Token MP-IND-001 successfully generated and committed for farmer 9826022222 at mandi mandi-indore-sec-b70fa4 in slot 10:00 AM - 12:00 PM
+2026-09-14T13:00:37.818Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CREATED] for mandi [mandi-indore-sec-b70fa4] post-commit
+2026-09-14T13:00:37.818Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-indore-sec-b70fa4] post-commit
+2026-09-14T13:00:37.849Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-4] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826022222: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
 ]]></system-out>
   </testcase>
-  <testcase name="testAdmin_anyDistrict_returns200" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.097"/>
-  <testcase name="testDistrictOfficer_ownDistrict_returns200" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.033"/>
-  <testcase name="testDistrictOfficer_anotherDistrict_returns403" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.06">
-    <system-out><![CDATA[2026-09-14T13:00:25.167Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_b0d56d7a assigned to [Sehore] attempted to access district [Ujjain]
-2026-09-14T13:00:25.168Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+  <testcase name="testManagerCannotModifyOtherMandiSlot" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.033">
+    <system-out><![CDATA[2026-09-14T13:00:37.885Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: Mandi scoped user mgr_sehore assigned to [mandi-sehore-sec-e7097e] attempted to access mandi [mandi-indore-sec-41517e]
+2026-09-14T13:00:37.890Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: Mandi scoped user mgr_sehore assigned to [mandi-sehore-sec-e7097e] attempted to access mandi [mandi-indore-sec-41517e]
 ]]></system-out>
   </testcase>
-  <testcase name="testDistrictOfficer_omittedDistrict_returnsOnlyAssignedDistrict" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.033"/>
-  <testcase name="testDistrictOfficer_procurementCsv_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.084">
-    <system-out><![CDATA[2026-09-14T13:00:25.287Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_21f9855f assigned to [Sehore] attempted to access district [Ujjain]
-2026-09-14T13:00:25.288Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+  <testcase name="testDistrictOfficerCannotAccessOtherDistrict" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.058">
+    <system-out><![CDATA[2026-09-14T13:00:37.952Z  WARN 11098 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore attempted to access resource in district [Indore] but is assigned to [Sehore]
 ]]></system-out>
   </testcase>
+  <testcase name="testFarmerCannotRetrieveOtherFarmerBooking" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.034">
+    <system-out><![CDATA[2026-09-14T13:00:37.976Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : SLOT DEBUG: slotId=slot-b-2537cf, bookedQuintals=30, bookedFarmers=1
+2026-09-14T13:00:37.981Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : Official Token MP-IND-001 successfully generated and committed for farmer 9826022222 at mandi mandi-indore-sec-7231c5 in slot 10:00 AM - 12:00 PM
+2026-09-14T13:00:37.982Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CREATED] for mandi [mandi-indore-sec-7231c5] post-commit
+2026-09-14T13:00:37.982Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-indore-sec-7231c5] post-commit
+2026-09-14T13:00:37.985Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-5] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826022222: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
+]]></system-out>
+  </testcase>
+  <testcase name="testRepeatedCancellationFailsSafely" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.081">
+    <system-out><![CDATA[2026-09-14T13:00:38.013Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : SLOT DEBUG: slotId=slot-a-ea7dcb, bookedQuintals=20, bookedFarmers=1
+2026-09-14T13:00:38.052Z  INFO 11098 --- [kisansarthi-backend] [           main] com.kisansarthi.booking.BookingService   : Official Token MP-SEH-001 successfully generated and committed for farmer 9826011111 at mandi mandi-sehore-sec-a1bcc4 in slot 08:00 AM - 10:00 AM
+2026-09-14T13:00:38.053Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-6] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826011111: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
+2026-09-14T13:00:38.054Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CREATED] for mandi [mandi-sehore-sec-a1bcc4] post-commit
+2026-09-14T13:00:38.054Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-sehore-sec-a1bcc4] post-commit
+2026-09-14T13:00:38.063Z  WARN 11098 --- [kisansarthi-backend] [cTaskExecutor-7] com.kisansarthi.sms.SmsService           : [SMS SERVICE] Blocked custom message dispatch in Trial mode to 9826011111: Twilio Trial accounts cannot send this custom message. Use Twilio Trial Test mode or upgrade/configure the Twilio account for production SMS.
+2026-09-14T13:00:38.064Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [SLOT_CAPACITY_CHANGED] for mandi [mandi-sehore-sec-a1bcc4] post-commit
+2026-09-14T13:00:38.065Z  INFO 11098 --- [kisansarthi-backend] [           main] c.kisansarthi.slot.SlotEventPublisher    : Broadcasted real-time event [BOOKING_CANCELLED] for mandi [mandi-sehore-sec-a1bcc4] post-commit
+]]></system-out>
+  </testcase>
+  <testcase name="testFarmerCannotImpersonateOtherFarmer" classname="com.kisansarthi.security.SecurityRegressionIntegrationTest" time="0.022"/>
 </testsuite>

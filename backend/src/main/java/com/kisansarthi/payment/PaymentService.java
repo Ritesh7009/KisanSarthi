@@ -45,11 +45,11 @@ public class PaymentService {
 
     @Transactional(readOnly = true)
     public PaymentDto getPayment(UUID bookingId) {
+        Booking booking = bookingRepository.findById(bookingId)
+                .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+        authorizationService.verifyBookingAccess(booking);
         Payment p = paymentRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for booking: " + bookingId));
-        if (p.getMandi() != null) {
-            authorizationService.verifyDistrictAccess(p.getMandi().getDistrict());
-        }
         return toDto(p);
     }
 
@@ -57,6 +57,8 @@ public class PaymentService {
     public PaymentDto initiatePayment(UUID bookingId, PaymentDto req) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        authorizationService.verifyBookingAccess(booking);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BusinessException("BOOKING_CANCELLED", "Cannot initiate payment for cancelled booking: " + bookingId);
@@ -135,6 +137,8 @@ public class PaymentService {
     public PaymentDto confirmPaymentCredit(UUID bookingId, String dbtRef) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        authorizationService.verifyBookingAccess(booking);
 
         Payment payment = paymentRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for booking: " + bookingId));

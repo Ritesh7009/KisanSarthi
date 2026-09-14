@@ -1,5 +1,6 @@
 package com.kisansarthi.queue;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.booking.Booking;
 import com.kisansarthi.booking.BookingRepository;
 import com.kisansarthi.booking.BookingStatus;
@@ -25,6 +26,7 @@ public class QueueService {
     private final BookingRepository bookingRepository;
     private final SimpMessagingTemplate messagingTemplate;
     private final SmsService smsService;
+    private final SecurityAuthorizationService authorizationService;
 
     public QueueService(
             QueueStateRepository queueStateRepository,
@@ -32,7 +34,8 @@ public class QueueService {
             MandiRepository mandiRepository,
             BookingRepository bookingRepository,
             SimpMessagingTemplate messagingTemplate,
-            SmsService smsService
+            SmsService smsService,
+            SecurityAuthorizationService authorizationService
     ) {
         this.queueStateRepository = queueStateRepository;
         this.queueEventRepository = queueEventRepository;
@@ -40,21 +43,25 @@ public class QueueService {
         this.bookingRepository = bookingRepository;
         this.messagingTemplate = messagingTemplate;
         this.smsService = smsService;
+        this.authorizationService = authorizationService;
     }
 
     @Transactional(readOnly = true)
     public QueueState getQueueState(String mandiId) {
+        authorizationService.verifyMandiAccess(mandiId);
         return queueStateRepository.findById(mandiId)
                 .orElseThrow(() -> new ResourceNotFoundException("Queue state not found for mandi: " + mandiId));
     }
 
     @Transactional(readOnly = true)
     public List<QueueEvent> getRecentEvents(String mandiId) {
+        authorizationService.verifyMandiAccess(mandiId);
         return queueEventRepository.findByMandiIdOrderByCreatedAtDesc(mandiId);
     }
 
     @Transactional
     public QueueEventDto advanceQueue(String mandiId, String operatorUsername) {
+        authorizationService.verifyMandiAccess(mandiId);
         QueueState queueState = queueStateRepository.findByIdForUpdate(mandiId)
                 .orElseGet(() -> {
                     Mandi mandi = mandiRepository.findById(mandiId)

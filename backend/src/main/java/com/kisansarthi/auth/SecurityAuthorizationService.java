@@ -12,6 +12,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @Component
 public class SecurityAuthorizationService {
@@ -151,10 +152,122 @@ public class SecurityAuthorizationService {
         }
 
         SecurityUserContext context = contextOpt.get();
-        if (context.isDistrictOfficer()) {
+        if (context.isMandiScoped()) {
+            String userMandiId = context.getMandiId();
+            if (userMandiId != null && !userMandiId.isBlank() && !userMandiId.equalsIgnoreCase(mandiId.trim())) {
+                log.warn("Access Denied: Mandi scoped user {} assigned to [{}] attempted to access mandi [{}]",
+                        context.getUsername(), userMandiId, mandiId);
+                throw new AccessDeniedException("Access denied: You are only authorized to access mandi: " + userMandiId);
+            }
+        } else if (context.isDistrictOfficer()) {
             Optional<Mandi> mandiOpt = mandiRepository.findById(mandiId);
             if (mandiOpt.isPresent()) {
                 verifyDistrictAccess(mandiOpt.get().getDistrict());
+            }
+        }
+    }
+
+    /**
+     * Verifies whether the current user or explicitly passed username is authorized to cancel a booking.
+     */
+    public void verifyBookingCancellation(com.kisansarthi.booking.Booking booking, String username) {
+        if (booking == null) {
+            return;
+        }
+
+        Optional<SecurityUserContext> contextOpt = getCurrentUserContext();
+        User user = null;
+
+        if (contextOpt.isPresent()) {
+            user = userRepository.findByUsername(contextOpt.get().getUsername()).orElse(null);
+        } else if (username != null && !username.isBlank()) {
+            user = userRepository.findByUsername(username).orElse(null);
+        }
+
+        if (user == null) {
+            // If running without security context (e.g. unauthenticated test scenario), return safely
+            return;
+        }
+
+        Role role = user.getRole();
+        if (role == Role.ROLE_ADMIN) {
+            return;
+        }
+
+        if (role == Role.ROLE_FARMER) {
+            Farmer bookingFarmer = booking.getFarmer();
+            if (bookingFarmer == null) {
+                throw new AccessDeniedException("Access denied: Booking has no associated farmer");
+            }
+            Optional<Farmer> callerFarmer = farmerRepository.findByUserId(user.getId());
+            if (callerFarmer.isEmpty() || !callerFarmer.get().getId().equals(bookingFarmer.getId())) {
+                throw new AccessDeniedException("Access denied: You are only authorized to cancel your own bookings");
+            }
+            return;
+        }
+
+        if (role == Role.ROLE_MANDI_OPERATOR || role == Role.ROLE_MANDI_MANAGER) {
+            String userMandiId = user.getMandiId();
+            if (userMandiId != null && !userMandiId.isBlank() && booking.getMandi() != null) {
+                if (!userMandiId.equalsIgnoreCase(booking.getMandi().getId())) {
+                    throw new AccessDeniedException("Access denied: You are only authorized to cancel bookings for mandi: " + userMandiId);
+                }
+            }
+            return;
+        }
+
+        if (role == Role.ROLE_DISTRICT_OFFICER) {
+            if (booking.getMandi() != null) {
+                verifyDistrictAccess(booking.getMandi().getDistrict());
+            }
+            return;
+        }
+
+        throw new AccessDeniedException("Access denied: Unauthorized role: " + role);
+    }
+
+    /**
+     * Verifies whether the current user is authorized to read or mutate a booking.
+     */
+    public void verifyBookingAccess(com.kisansarthi.booking.Booking booking) {
+        if (booking == null) {
+            return;
+        }
+
+        Optional<SecurityUserContext> contextOpt = getCurrentUserContext();
+        if (contextOpt.isEmpty()) {
+            return;
+        }
+
+        SecurityUserContext context = contextOpt.get();
+        if (context.isAdmin()) {
+            return;
+        }
+
+        if (context.getRole() == Role.ROLE_FARMER) {
+            User user = userRepository.findByUsername(context.getUsername()).orElse(null);
+            if (user != null) {
+                Farmer bookingFarmer = booking.getFarmer();
+                if (bookingFarmer != null) {
+                    Optional<Farmer> callerFarmer = farmerRepository.findByUserId(user.getId());
+                    if (callerFarmer.isEmpty() || !callerFarmer.get().getId().equals(bookingFarmer.getId())) {
+                        throw new AccessDeniedException("Access denied: You are only authorized to access your own bookings");
+                    }
+                }
+            }
+            return;
+        }
+
+        if (context.isMandiScoped()) {
+            if (booking.getMandi() != null) {
+                verifyMandiAccess(booking.getMandi().getId());
+            }
+            return;
+        }
+
+        if (context.isDistrictOfficer()) {
+            if (booking.getMandi() != null) {
+                verifyDistrictAccess(booking.getMandi().getDistrict());
             }
         }
     }

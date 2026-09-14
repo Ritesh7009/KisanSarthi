@@ -65,9 +65,7 @@ public class WeighmentService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
 
-        if (booking.getMandi() != null) {
-            authorizationService.verifyDistrictAccess(booking.getMandi().getDistrict());
-        }
+        authorizationService.verifyBookingAccess(booking);
 
         return weighmentRepository.findByBookingId(bookingId)
                 .map(w -> toDto(w, booking))
@@ -78,6 +76,8 @@ public class WeighmentService {
     public WeighmentDto startWeighment(UUID bookingId, String weighbridgeBay, String operatorUsername) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        authorizationService.verifyBookingAccess(booking);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BusinessException("BOOKING_CANCELLED", "Cannot start weighment for cancelled booking: " + bookingId);
@@ -139,6 +139,8 @@ public class WeighmentService {
     public WeighmentDto recordWeighment(UUID bookingId, WeighmentDto req, String operatorUsername) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        authorizationService.verifyBookingAccess(booking);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BusinessException("BOOKING_CANCELLED", "Cannot record weighment for a cancelled booking");
@@ -308,6 +310,8 @@ public class WeighmentService {
     public BookingResponse completeProcurement(UUID bookingId, String operatorUsername) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        authorizationService.verifyBookingAccess(booking);
 
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BusinessException("BOOKING_CANCELLED", "Cannot complete procurement for a cancelled booking");
