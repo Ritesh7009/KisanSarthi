@@ -1,5 +1,6 @@
 package com.kisansarthi.farmer;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.auth.User;
 import com.kisansarthi.auth.UserRepository;
 import com.kisansarthi.common.ResourceNotFoundException;
@@ -16,10 +17,16 @@ public class FarmerService {
 
     private final FarmerRepository farmerRepository;
     private final UserRepository userRepository;
+    private final SecurityAuthorizationService authorizationService;
 
-    public FarmerService(FarmerRepository farmerRepository, UserRepository userRepository) {
+    public FarmerService(
+            FarmerRepository farmerRepository,
+            UserRepository userRepository,
+            SecurityAuthorizationService authorizationService
+    ) {
         this.farmerRepository = farmerRepository;
         this.userRepository = userRepository;
+        this.authorizationService = authorizationService;
     }
 
     public FarmerDto getFarmerByUsername(String username) {
@@ -52,13 +59,15 @@ public class FarmerService {
     }
 
     public org.springframework.data.domain.Page<FarmerDto> getFarmersPaginated(String district, int page, int size) {
+        String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
+
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 100)); // Enforce maximum page size of 100
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
                 safePage, safeSize, org.springframework.data.domain.Sort.by("createdAt").descending().and(org.springframework.data.domain.Sort.by("id").descending())
         );
 
-        return farmerRepository.findAllWithOptionalDistrict(district, pageable)
+        return farmerRepository.findAllWithOptionalDistrict(effectiveDistrict, pageable)
                 .map(FarmerDto::fromEntity);
     }
 

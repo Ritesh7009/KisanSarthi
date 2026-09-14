@@ -1,5 +1,6 @@
 package com.kisansarthi.report;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.booking.Booking;
 import com.kisansarthi.booking.BookingRepository;
 import com.kisansarthi.booking.BookingStatus;
@@ -36,6 +37,7 @@ public class ReportService {
     private final PaymentRepository paymentRepository;
     private final SlotRepository slotRepository;
     private final ProcurementTargetRepository targetRepository;
+    private final SecurityAuthorizationService authorizationService;
 
     private static final ZoneId IST_ZONE = ZoneId.of("Asia/Kolkata");
 
@@ -56,7 +58,8 @@ public class ReportService {
             WeighmentRepository weighmentRepository,
             PaymentRepository paymentRepository,
             SlotRepository slotRepository,
-            ProcurementTargetRepository targetRepository
+            ProcurementTargetRepository targetRepository,
+            SecurityAuthorizationService authorizationService
     ) {
         this.mandiRepository = mandiRepository;
         this.bookingRepository = bookingRepository;
@@ -66,6 +69,7 @@ public class ReportService {
         this.paymentRepository = paymentRepository;
         this.slotRepository = slotRepository;
         this.targetRepository = targetRepository;
+        this.authorizationService = authorizationService;
     }
 
     // ==========================================
@@ -118,8 +122,73 @@ public class ReportService {
     // ==========================================
     @Transactional(readOnly = true)
     public DistrictStatsReportDto getDistrictStats() {
-        List<Mandi> allMandis = mandiRepository.findAll();
-        List<ProcurementTarget> targets = targetRepository.findAll();
+        // Enforce district authorization: for ROLE_DISTRICT_OFFICER, authoritativeDistrict is non-null
+        String authoritativeDistrict = authorizationService.resolveAndAuthorizeDistrict(null);
+
+        List<Mandi> allMandis;
+        List<ProcurementTarget> targets;
+        Map<String, Long> farmersByDistrict = new HashMap<>();
+        Map<String, Object[]> bookingAggByDistrict = new HashMap<>();
+        Map<String, BigDecimal> bookedTodayByDistrict = new HashMap<>();
+        Map<String, BigDecimal> settledPaymentsByDistrict = new HashMap<>();
+
+        if (authoritativeDistrict != null && !authoritativeDistrict.isBlank()) {
+            // District Officer or district-scoped query: load ONLY the authorized district at repository/DB level
+            allMandis = mandiRepository.findByDistrictIgnoreCase(authoritativeDistrict);
+            targets = targetRepository.findByDistrictIgnoreCase(authoritativeDistrict);
+
+            for (Object[] row : farmerRepository.countFarmersForSingleDistrict(authoritativeDistrict)) {
+                if (row[0] != null && row[1] != null) {
+                    farmersByDistrict.put((String) row[0], ((Number) row[1]).longValue());
+                }
+            }
+
+            for (Object[] row : bookingRepository.aggregateProcurementForSingleDistrict(authoritativeDistrict, COMPLETED_STATUSES)) {
+                if (row[0] != null) {
+                    bookingAggByDistrict.put((String) row[0], row);
+                }
+            }
+
+            for (Object[] row : bookingRepository.sumEstimatedYieldTodayForSingleDistrict(authoritativeDistrict, LocalDate.now(IST_ZONE))) {
+                if (row[0] != null && row[1] != null) {
+                    bookedTodayByDistrict.put((String) row[0], (BigDecimal) row[1]);
+                }
+            }
+
+            for (Object[] row : paymentRepository.sumSettledPaymentsForSingleDistrict(authoritativeDistrict)) {
+                if (row[0] != null && row[1] != null) {
+                    settledPaymentsByDistrict.put((String) row[0], (BigDecimal) row[1]);
+                }
+            }
+        } else {
+            // Unscoped (ADMIN): load statewide data
+            allMandis = mandiRepository.findAll();
+            targets = targetRepository.findAll();
+
+            for (Object[] row : farmerRepository.countFarmersByDistrict()) {
+                if (row[0] != null && row[1] != null) {
+                    farmersByDistrict.put((String) row[0], ((Number) row[1]).longValue());
+                }
+            }
+
+            for (Object[] row : bookingRepository.aggregateProcurementByDistrict(COMPLETED_STATUSES)) {
+                if (row[0] != null) {
+                    bookingAggByDistrict.put((String) row[0], row);
+                }
+            }
+
+            for (Object[] row : bookingRepository.sumEstimatedYieldTodayByDistrict(LocalDate.now(IST_ZONE))) {
+                if (row[0] != null && row[1] != null) {
+                    bookedTodayByDistrict.put((String) row[0], (BigDecimal) row[1]);
+                }
+            }
+
+            for (Object[] row : paymentRepository.sumSettledPaymentsByDistrict()) {
+                if (row[0] != null && row[1] != null) {
+                    settledPaymentsByDistrict.put((String) row[0], (BigDecimal) row[1]);
+                }
+            }
+        }
 
         Map<String, List<Mandi>> mandisByDistrict = allMandis.stream()
                 .collect(Collectors.groupingBy(Mandi::getDistrict));
@@ -131,41 +200,12 @@ public class ReportService {
                         (existing, replacement) -> existing
                 ));
 
-        Map<String, Long> farmersByDistrict = new HashMap<>();
-        for (Object[] row : farmerRepository.countFarmersByDistrict()) {
-            if (row[0] != null && row[1] != null) {
-                farmersByDistrict.put((String) row[0], ((Number) row[1]).longValue());
-            }
-        }
-
-        // Aggregate bookings grouped by district in SQL
-        // row: [district, totalBookings, completedBookings, sumNetWeight, sumSettlement, distinctFarmers]
-        Map<String, Object[]> bookingAggByDistrict = new HashMap<>();
-        for (Object[] row : bookingRepository.aggregateProcurementByDistrict(COMPLETED_STATUSES)) {
-            if (row[0] != null) {
-                bookingAggByDistrict.put((String) row[0], row);
-            }
-        }
-
-        // Aggregate today's booked yields by district in SQL
-        Map<String, BigDecimal> bookedTodayByDistrict = new HashMap<>();
-        for (Object[] row : bookingRepository.sumEstimatedYieldTodayByDistrict(LocalDate.now(IST_ZONE))) {
-            if (row[0] != null && row[1] != null) {
-                bookedTodayByDistrict.put((String) row[0], (BigDecimal) row[1]);
-            }
-        }
-
-        // Aggregate settled payments by district in SQL
-        Map<String, BigDecimal> settledPaymentsByDistrict = new HashMap<>();
-        for (Object[] row : paymentRepository.sumSettledPaymentsByDistrict()) {
-            if (row[0] != null && row[1] != null) {
-                settledPaymentsByDistrict.put((String) row[0], (BigDecimal) row[1]);
-            }
-        }
-
         Set<String> districtNames = new LinkedHashSet<>();
         mandisByDistrict.keySet().forEach(districtNames::add);
         targets.forEach(t -> districtNames.add(t.getDistrict()));
+        if (authoritativeDistrict != null && !authoritativeDistrict.isBlank() && districtNames.isEmpty()) {
+            districtNames.add(authoritativeDistrict);
+        }
 
         List<DistrictProcurementStatDto> dtoList = new ArrayList<>();
 
@@ -226,11 +266,19 @@ public class ReportService {
             dtoList.add(dto);
         }
 
+        int totalMandis = allMandis.size();
+        int totalBookingsCount = (authoritativeDistrict != null && !authoritativeDistrict.isBlank())
+                ? (int) bookingRepository.countByMandiDistrictIgnoreCase(authoritativeDistrict)
+                : (int) bookingRepository.count();
+        int totalFarmersCount = (authoritativeDistrict != null && !authoritativeDistrict.isBlank())
+                ? (int) farmerRepository.countByDistrictIgnoreCase(authoritativeDistrict)
+                : (int) farmerRepository.count();
+
         return new DistrictStatsReportDto(
                 dtoList,
-                allMandis.size(),
-                (int) bookingRepository.count(),
-                (int) farmerRepository.count()
+                totalMandis,
+                totalBookingsCount,
+                totalFarmersCount
         );
     }
 
@@ -239,11 +287,14 @@ public class ReportService {
     // ==========================================
     @Transactional(readOnly = true)
     public List<MandiPerformanceDto> getMandiPerformance(String districtFilter) {
-        List<Mandi> mandis = mandiRepository.findAll();
-        if (districtFilter != null && !districtFilter.isBlank()) {
-            mandis = mandis.stream()
-                    .filter(m -> m.getDistrict().equalsIgnoreCase(districtFilter.trim()))
-                    .toList();
+        // Enforce district authorization: for ROLE_DISTRICT_OFFICER, authoritativeDistrict is enforced
+        String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(districtFilter);
+
+        List<Mandi> mandis;
+        if (effectiveDistrict != null && !effectiveDistrict.isBlank()) {
+            mandis = mandiRepository.findByDistrictIgnoreCase(effectiveDistrict.trim());
+        } else {
+            mandis = mandiRepository.findAll();
         }
 
         // Aggregate slot capacities by mandi using SQL aggregation (removes full slot table load)
@@ -698,11 +749,15 @@ public class ReportService {
     @Deprecated
     @Transactional(readOnly = true)
     public List<ProcurementRegisterRowDto> getProcurementRegister(String district, String mandiId, String cropId) {
+        String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
+        // If a mandiId is specified, verify district access for it
+        authorizationService.verifyMandiAccess(mandiId);
+
         // Enforce strict server-side bounding (max 200) for legacy non-paginated compatibility endpoint
         org.springframework.data.domain.PageRequest pageRequest =
                 org.springframework.data.domain.PageRequest.of(0, ReportConstants.MAX_REGISTER_PAGE_SIZE);
         org.springframework.data.domain.Page<Booking> bookingPage =
-                bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, null, pageRequest);
+                bookingRepository.findFilteredForRegisterPageable(effectiveDistrict, mandiId, cropId, null, pageRequest);
         return mapBookingsToRegisterRows(bookingPage.getContent());
     }
 
@@ -710,6 +765,9 @@ public class ReportService {
     public PaginatedProcurementRegisterDto getPaginatedProcurementRegister(
             String district, String mandiId, String cropId, String search, int page, int size
     ) {
+        String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
+        authorizationService.verifyMandiAccess(mandiId);
+
         int boundedSize = Math.max(1, Math.min(size, ReportConstants.MAX_REGISTER_PAGE_SIZE));
         int boundedPage = Math.max(0, page);
         org.springframework.data.domain.PageRequest pageRequest = org.springframework.data.domain.PageRequest.of(boundedPage, boundedSize);
@@ -717,7 +775,7 @@ public class ReportService {
         String trimmedSearch = (search != null && !search.isBlank()) ? search.trim() : null;
 
         org.springframework.data.domain.Page<Booking> bookingPage = bookingRepository.findFilteredForRegisterPageable(
-                district, mandiId, cropId, trimmedSearch, pageRequest
+                effectiveDistrict, mandiId, cropId, trimmedSearch, pageRequest
         );
 
         List<ProcurementRegisterRowDto> content = mapBookingsToRegisterRows(bookingPage.getContent());
@@ -732,12 +790,33 @@ public class ReportService {
         );
     }
 
+    public String resolveAndAuthorizeDistrict(String district) {
+        return authorizationService.resolveAndAuthorizeDistrict(district);
+    }
+
+    public void verifyMandiAccess(String mandiId) {
+        authorizationService.verifyMandiAccess(mandiId);
+    }
+
     /**
      * Memory-bounded progressive streaming of procurement register directly to an output stream in batches.
      */
     @Transactional(readOnly = true)
     public void streamProcurementRegisterCsv(
             String district,
+            String mandiId,
+            String cropId,
+            String search,
+            java.io.OutputStream outputStream
+    ) throws java.io.IOException {
+        String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
+        authorizationService.verifyMandiAccess(mandiId);
+        streamProcurementRegisterCsvWithAuthorizedDistrict(effectiveDistrict, mandiId, cropId, search, outputStream);
+    }
+
+    @Transactional(readOnly = true)
+    public void streamProcurementRegisterCsvWithAuthorizedDistrict(
+            String effectiveDistrict,
             String mandiId,
             String cropId,
             String search,
@@ -762,7 +841,7 @@ public class ReportService {
                     org.springframework.data.domain.PageRequest.of(pageIndex, batchSize);
 
             org.springframework.data.domain.Page<Booking> bookingPage =
-                    bookingRepository.findFilteredForRegisterPageable(district, mandiId, cropId, trimmedSearch, pageRequest);
+                    bookingRepository.findFilteredForRegisterPageable(effectiveDistrict, mandiId, cropId, trimmedSearch, pageRequest);
 
             List<Booking> batchBookings = bookingPage.getContent();
             if (batchBookings.isEmpty()) {

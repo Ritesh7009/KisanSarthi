@@ -1,5 +1,6 @@
 package com.kisansarthi.payment;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.booking.Booking;
 import com.kisansarthi.booking.BookingRepository;
 import com.kisansarthi.booking.BookingStatus;
@@ -24,25 +25,31 @@ public class PaymentService {
     private final QueueEventRepository queueEventRepository;
     private final SmsService smsService;
     private final SlotEventPublisher eventPublisher;
+    private final SecurityAuthorizationService authorizationService;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             BookingRepository bookingRepository,
             QueueEventRepository queueEventRepository,
             SmsService smsService,
-            SlotEventPublisher eventPublisher
+            SlotEventPublisher eventPublisher,
+            SecurityAuthorizationService authorizationService
     ) {
         this.paymentRepository = paymentRepository;
         this.bookingRepository = bookingRepository;
         this.queueEventRepository = queueEventRepository;
         this.smsService = smsService;
         this.eventPublisher = eventPublisher;
+        this.authorizationService = authorizationService;
     }
 
     @Transactional(readOnly = true)
     public PaymentDto getPayment(UUID bookingId) {
         Payment p = paymentRepository.findByBookingId(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment not found for booking: " + bookingId));
+        if (p.getMandi() != null) {
+            authorizationService.verifyDistrictAccess(p.getMandi().getDistrict());
+        }
         return toDto(p);
     }
 

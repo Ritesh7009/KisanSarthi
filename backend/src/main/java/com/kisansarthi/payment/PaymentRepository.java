@@ -27,6 +27,9 @@ public interface PaymentRepository extends JpaRepository<Payment, UUID> {
     @Query("SELECT p.mandi.district, COALESCE(SUM(p.netPayableAmount), 0) FROM Payment p WHERE UPPER(p.paymentStatus) = 'COMPLETED' GROUP BY p.mandi.district")
     List<Object[]> sumSettledPaymentsByDistrict();
 
+    @Query("SELECT p.mandi.district, COALESCE(SUM(p.netPayableAmount), 0) FROM Payment p WHERE UPPER(p.paymentStatus) = 'COMPLETED' AND LOWER(p.mandi.district) = LOWER(:district) GROUP BY p.mandi.district")
+    List<Object[]> sumSettledPaymentsForSingleDistrict(@Param("district") String district);
+
     @Query("SELECT p.mandi.id, COALESCE(SUM(p.netPayableAmount), 0) FROM Payment p WHERE UPPER(p.paymentStatus) = 'COMPLETED' GROUP BY p.mandi.id")
     List<Object[]> sumSettledPaymentsByMandi();
 

@@ -39,10 +39,27 @@ public class BookingController {
     }
 
     @GetMapping("/my")
-    @Operation(summary = "Get bookings for the currently authenticated farmer")
-    public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings(Authentication authentication) {
-        List<BookingResponse> bookings = bookingService.getBookingsByFarmer(authentication.getName());
-        return ResponseEntity.ok(ApiResponse.ok(bookings));
+    @Operation(summary = "Get bookings for the currently authenticated farmer with optional pagination")
+    public ResponseEntity<ApiResponse<List<BookingResponse>>> getMyBookings(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication
+    ) {
+        String username = authentication != null ? authentication.getName() : null;
+        org.springframework.data.domain.Page<BookingResponse> paginated = bookingService.getBookingsByFarmer(username, page, size);
+        return ResponseEntity.ok(ApiResponse.ok(paginated.getContent()));
+    }
+
+    @GetMapping("/my/paginated")
+    @Operation(summary = "Get paginated bookings metadata for the currently authenticated farmer")
+    public ResponseEntity<ApiResponse<org.springframework.data.domain.Page<BookingResponse>>> getMyBookingsPaginated(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            Authentication authentication
+    ) {
+        String username = authentication != null ? authentication.getName() : null;
+        org.springframework.data.domain.Page<BookingResponse> paginated = bookingService.getBookingsByFarmer(username, page, size);
+        return ResponseEntity.ok(ApiResponse.ok(paginated));
     }
 
     @GetMapping("/{id}")

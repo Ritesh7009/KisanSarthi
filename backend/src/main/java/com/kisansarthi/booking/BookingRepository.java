@@ -19,10 +19,19 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     Optional<Booking> findByIdempotencyKey(String idempotencyKey);
     Optional<Booking> findByTokenNumber(String tokenNumber);
     List<Booking> findByFarmerIdOrderByCreatedAtDesc(UUID farmerId);
+    @Query(value = "SELECT b FROM Booking b " +
+           "LEFT JOIN FETCH b.farmer f " +
+           "LEFT JOIN FETCH b.mandi m " +
+           "LEFT JOIN FETCH b.crop c " +
+           "WHERE b.farmer.id = :farmerId",
+           countQuery = "SELECT COUNT(b) FROM Booking b WHERE b.farmer.id = :farmerId")
+    Page<Booking> findByFarmerId(@Param("farmerId") UUID farmerId, Pageable pageable);
     List<Booking> findByMandiIdAndScheduledDateOrderByTokenSequenceAsc(String mandiId, LocalDate date);
     Page<Booking> findByMandiId(String mandiId, Pageable pageable);
+    Page<Booking> findByMandiDistrictIgnoreCase(String district, Pageable pageable);
     Page<Booking> findAll(Pageable pageable);
     List<Booking> findByMandiIdAndStatus(String mandiId, BookingStatus status);
+    long countByMandiDistrictIgnoreCase(String district);
 
     // ==========================================
     // HIGH PERFORMANCE NATIVE / JPQL REPORT AGGREGATIONS
@@ -65,9 +74,25 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
            "FROM Booking b GROUP BY b.mandi.district")
     List<Object[]> aggregateProcurementByDistrict(@Param("completedStatuses") Collection<BookingStatus> completedStatuses);
 
+    @Query("SELECT b.mandi.district, COUNT(b), " +
+           "COUNT(CASE WHEN b.status IN :completedStatuses THEN 1 END), " +
+           "COALESCE(SUM(CASE WHEN b.status IN :completedStatuses THEN b.netWeightQuintals ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN b.status IN :completedStatuses THEN b.settlementAmount ELSE 0 END), 0), " +
+           "COUNT(DISTINCT CASE WHEN b.status IN :completedStatuses THEN b.farmer.id END) " +
+           "FROM Booking b WHERE LOWER(b.mandi.district) = LOWER(:district) GROUP BY b.mandi.district")
+    List<Object[]> aggregateProcurementForSingleDistrict(
+            @Param("district") String district,
+            @Param("completedStatuses") Collection<BookingStatus> completedStatuses);
+
     @Query("SELECT b.mandi.district, COALESCE(SUM(b.estimatedYieldQuintals), 0) " +
            "FROM Booking b WHERE b.scheduledDate = :today GROUP BY b.mandi.district")
     List<Object[]> sumEstimatedYieldTodayByDistrict(@Param("today") LocalDate today);
+
+    @Query("SELECT b.mandi.district, COALESCE(SUM(b.estimatedYieldQuintals), 0) " +
+           "FROM Booking b WHERE b.scheduledDate = :today AND LOWER(b.mandi.district) = LOWER(:district) GROUP BY b.mandi.district")
+    List<Object[]> sumEstimatedYieldTodayForSingleDistrict(
+            @Param("district") String district,
+            @Param("today") LocalDate today);
 
     @Query("SELECT b.scheduledDate, COUNT(b), " +
            "COUNT(CASE WHEN b.status IN :completedStatuses THEN 1 END), " +

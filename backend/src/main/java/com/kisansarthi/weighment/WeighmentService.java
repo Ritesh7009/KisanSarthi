@@ -1,5 +1,6 @@
 package com.kisansarthi.weighment;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.auth.User;
 import com.kisansarthi.auth.UserRepository;
 import com.kisansarthi.booking.Booking;
@@ -37,6 +38,7 @@ public class WeighmentService {
     private final UserRepository userRepository;
     private final SmsService smsService;
     private final SlotEventPublisher eventPublisher;
+    private final SecurityAuthorizationService authorizationService;
 
     public WeighmentService(
             WeighmentRepository weighmentRepository,
@@ -45,7 +47,8 @@ public class WeighmentService {
             QueueEventRepository queueEventRepository,
             UserRepository userRepository,
             SmsService smsService,
-            SlotEventPublisher eventPublisher
+            SlotEventPublisher eventPublisher,
+            SecurityAuthorizationService authorizationService
     ) {
         this.weighmentRepository = weighmentRepository;
         this.bookingRepository = bookingRepository;
@@ -54,12 +57,17 @@ public class WeighmentService {
         this.userRepository = userRepository;
         this.smsService = smsService;
         this.eventPublisher = eventPublisher;
+        this.authorizationService = authorizationService;
     }
 
     @Transactional(readOnly = true)
     public WeighmentDto getWeighment(UUID bookingId) {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + bookingId));
+
+        if (booking.getMandi() != null) {
+            authorizationService.verifyDistrictAccess(booking.getMandi().getDistrict());
+        }
 
         return weighmentRepository.findByBookingId(bookingId)
                 .map(w -> toDto(w, booking))

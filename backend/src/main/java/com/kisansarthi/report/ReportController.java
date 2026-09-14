@@ -110,8 +110,12 @@ public class ReportController {
             @RequestParam(required = false) String cropId,
             @RequestParam(required = false) String search
     ) {
+        // Enforce authorization synchronously on the HTTP request thread BEFORE committing response headers
+        String effectiveDistrict = reportService.resolveAndAuthorizeDistrict(district);
+        reportService.verifyMandiAccess(mandiId);
+
         org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody responseBody = outputStream -> {
-            reportService.streamProcurementRegisterCsv(district, mandiId, cropId, search, outputStream);
+            reportService.streamProcurementRegisterCsvWithAuthorizedDistrict(effectiveDistrict, mandiId, cropId, search, outputStream);
         };
 
         return ResponseEntity.ok()

@@ -56,6 +56,7 @@ com/kisansarthi/report/MandiPerformanceDto.class
 com/kisansarthi/payment/PaymentController.class
 com/kisansarthi/booking/MandiTokenSequenceRepository.class
 com/kisansarthi/ai/YieldAdvisorResponse.class
+com/kisansarthi/auth/SecurityAuthorizationService.class
 com/kisansarthi/crop/CropService.class
 com/kisansarthi/mandi/Mandi.class
 com/kisansarthi/farmer/FarmerController.class
@@ -114,6 +115,7 @@ com/kisansarthi/auth/RefreshTokenRequest.class
 com/kisansarthi/sms/SmsService.class
 com/kisansarthi/config/RedisConfig.class
 com/kisansarthi/sms/SmsLog.class
+com/kisansarthi/auth/SecurityUserContext.class
 com/kisansarthi/report/StatewideOverviewDto.class
 com/kisansarthi/config/WebSocketConfig.class
 com/kisansarthi/report/TimeSeriesPointDto.class

@@ -1,5 +1,6 @@
 package com.kisansarthi.booking;
 
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.auth.User;
 import com.kisansarthi.auth.UserRepository;
 import com.kisansarthi.common.*;
@@ -43,6 +44,7 @@ public class BookingService {
     private final SlotService slotService;
     private final SlotRepository slotRepository;
     private final SlotEventPublisher eventPublisher;
+    private final SecurityAuthorizationService authorizationService;
 
     public BookingService(
             BookingRepository bookingRepository,
@@ -54,7 +56,8 @@ public class BookingService {
             SmsService smsService,
             SlotService slotService,
             SlotRepository slotRepository,
-            SlotEventPublisher eventPublisher) {
+            SlotEventPublisher eventPublisher,
+            SecurityAuthorizationService authorizationService) {
         this.bookingRepository = bookingRepository;
         this.sequenceRepository = sequenceRepository;
         this.farmerRepository = farmerRepository;
@@ -65,6 +68,7 @@ public class BookingService {
         this.slotService = slotService;
         this.slotRepository = slotRepository;
         this.eventPublisher = eventPublisher;
+        this.authorizationService = authorizationService;
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -292,15 +296,34 @@ public class BookingService {
         return BookingResponse.fromEntity(saved);
     }
 
-    public List<BookingResponse> getBookingsByFarmer(String username) {
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<BookingResponse> getBookingsByFarmer(UUID farmerId, int page, int size) {
+        int safePage = Math.max(0, page);
+        int safeSize = Math.max(1, Math.min(size, 100)); // Maximum size 100
+        org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
+                safePage,
+                safeSize,
+                org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "createdAt")
+                        .and(org.springframework.data.domain.Sort.by(org.springframework.data.domain.Sort.Direction.DESC, "id"))
+        );
+
+        return bookingRepository.findByFarmerId(farmerId, pageable)
+                .map(BookingResponse::fromEntity);
+    }
+
+    @Transactional(readOnly = true)
+    public org.springframework.data.domain.Page<BookingResponse> getBookingsByFarmer(String username, int page, int size) {
         User user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found: " + username));
         Farmer farmer = farmerRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found"));
 
-        return bookingRepository.findByFarmerIdOrderByCreatedAtDesc(farmer.getId()).stream()
-                .map(BookingResponse::fromEntity)
-                .collect(Collectors.toList());
+        return getBookingsByFarmer(farmer.getId(), page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public List<BookingResponse> getBookingsByFarmer(String username) {
+        return getBookingsByFarmer(username, 0, 100).getContent();
     }
 
     public List<BookingResponse> getAllBookings(String mandiId) {
@@ -308,22 +331,35 @@ public class BookingService {
     }
 
     public org.springframework.data.domain.Page<BookingResponse> getBookingsPaginated(String mandiId, int page, int size) {
+        String authoritativeDistrict = authorizationService.resolveAndAuthorizeDistrict(null);
+        if (mandiId != null && !mandiId.isBlank()) {
+            authorizationService.verifyMandiAccess(mandiId.trim());
+        }
+
         int safePage = Math.max(0, page);
         int safeSize = Math.max(1, Math.min(size, 100)); // Enforce maximum page size of 100
         org.springframework.data.domain.Pageable pageable = org.springframework.data.domain.PageRequest.of(
                 safePage, safeSize, org.springframework.data.domain.Sort.by("createdAt").descending().and(org.springframework.data.domain.Sort.by("id").descending())
         );
 
-        org.springframework.data.domain.Page<Booking> pageResult = (mandiId != null && !mandiId.isBlank())
-                ? bookingRepository.findByMandiId(mandiId.trim(), pageable)
-                : bookingRepository.findAll(pageable);
+        org.springframework.data.domain.Page<Booking> pageResult;
+        if (mandiId != null && !mandiId.isBlank()) {
+            pageResult = bookingRepository.findByMandiId(mandiId.trim(), pageable);
+        } else if (authoritativeDistrict != null && !authoritativeDistrict.isBlank()) {
+            pageResult = bookingRepository.findByMandiDistrictIgnoreCase(authoritativeDistrict.trim(), pageable);
+        } else {
+            pageResult = bookingRepository.findAll(pageable);
+        }
 
         return pageResult.map(BookingResponse::fromEntity);
     }
 
     public BookingResponse getBookingById(UUID id) {
-        return bookingRepository.findById(id)
-                .map(BookingResponse::fromEntity)
+        Booking booking = bookingRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Booking not found: " + id));
+        if (booking.getMandi() != null) {
+            authorizationService.verifyDistrictAccess(booking.getMandi().getDistrict());
+        }
+        return BookingResponse.fromEntity(booking);
     }
 }

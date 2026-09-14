@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.kisansarthi.report.ReportServiceIntegrationTest" time="4.198" tests="11" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="4.615" tests="10" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="UTF-8"/>
@@ -44,7 +44,7 @@
     <property name="localRepository" value="/root/.m2/repository"/>
     <property name="java.vendor.url.bug" value="https://bugs.launchpad.net/ubuntu/+source/openjdk-21"/>
     <property name="java.io.tmpdir" value="/tmp"/>
-    <property name="com.zaxxer.hikari.pool_number" value="4"/>
+    <property name="com.zaxxer.hikari.pool_number" value="3"/>
     <property name="java.version" value="21.0.12"/>
     <property name="user.dir" value="/app/applet/backend"/>
     <property name="os.arch" value="amd64"/>
@@ -61,10 +61,10 @@
     <property name="java.class.version" value="65.0"/>
     <property name="LOGGED_APPLICATION_NAME" value="[kisansarthi-backend] "/>
   </properties>
-  <testcase name="testPaginatedProcurementRegister" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.194">
-    <system-out><![CDATA[2026-09-14T11:41:21.470Z  INFO 5745 --- [kisansarthi-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.kisansarthi.report.ReportServiceIntegrationTest]: ReportServiceIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
-2026-09-14T11:41:21.472Z  INFO 5745 --- [kisansarthi-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.kisansarthi.KisanSarthiApplication for test class com.kisansarthi.report.ReportServiceIntegrationTest
-2026-09-14T11:41:21.477Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.b.d.r.RestartApplicationListener     : Restart disabled due to context in which it is running
+  <testcase name="testDistrictOfficer_farmers_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.477">
+    <system-out><![CDATA[2026-09-14T11:41:16.855Z  INFO 5745 --- [kisansarthi-backend] [           main] t.c.s.AnnotationConfigContextLoaderUtils : Could not detect default configuration classes for test class [com.kisansarthi.report.DistrictAuthorizationIntegrationTest]: DistrictAuthorizationIntegrationTest does not declare any static, non-private, non-final, nested classes annotated with @Configuration.
+2026-09-14T11:41:16.913Z  INFO 5745 --- [kisansarthi-backend] [           main] .b.t.c.SpringBootTestContextBootstrapper : Found @SpringBootConfiguration com.kisansarthi.KisanSarthiApplication for test class com.kisansarthi.report.DistrictAuthorizationIntegrationTest
+2026-09-14T11:41:16.919Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.b.d.r.RestartApplicationListener     : Restart disabled due to context in which it is running
 
   .   ____          _            __ _ _
  /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \
@@ -75,7 +75,7 @@
 
  :: Spring Boot ::                (v3.3.4)
 
-2026-09-14T11:41:21.553Z  WARN 5745 --- [kisansarthi-backend] [           main] ory$DuplicateJsonObjectContextCustomizer : 
+2026-09-14T11:41:16.976Z  WARN 5745 --- [kisansarthi-backend] [           main] ory$DuplicateJsonObjectContextCustomizer : 
 
 Found multiple occurrences of org.json.JSONObject on the class path:
 
@@ -84,43 +84,63 @@ Found multiple occurrences of org.json.JSONObject on the class path:
 
 You may wish to exclude one of them to ensure predictable runtime behavior
 
-2026-09-14T11:41:21.555Z  INFO 5745 --- [kisansarthi-backend] [           main] c.k.report.ReportServiceIntegrationTest  : Starting ReportServiceIntegrationTest using Java 21.0.12 with PID 5745 (started by root in /app/applet/backend)
-2026-09-14T11:41:21.555Z  INFO 5745 --- [kisansarthi-backend] [           main] c.k.report.ReportServiceIntegrationTest  : The following 1 profile is active: "test"
-2026-09-14T11:41:22.066Z  INFO 5745 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
-2026-09-14T11:41:22.066Z  INFO 5745 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
-2026-09-14T11:41:22.089Z  INFO 5745 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 23 ms. Found 14 JPA repository interfaces.
-2026-09-14T11:41:22.283Z  INFO 5745 --- [kisansarthi-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
-2026-09-14T11:41:22.285Z  INFO 5745 --- [kisansarthi-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
-2026-09-14T11:41:22.294Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
-2026-09-14T11:41:22.294Z  INFO 5745 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Starting...
-2026-09-14T11:41:22.297Z  INFO 5745 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-4 - Added connection conn30: url=jdbc:h2:mem:kisansarthi_report_test user=SA
-2026-09-14T11:41:22.298Z  INFO 5745 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-4 - Start completed.
-2026-09-14T11:41:22.298Z  WARN 5745 --- [kisansarthi-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
-2026-09-14T11:41:22.693Z  INFO 5745 --- [kisansarthi-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
-2026-09-14T11:41:22.773Z  INFO 5745 --- [kisansarthi-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
-2026-09-14T11:41:23.808Z  WARN 5745 --- [kisansarthi-backend] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
-2026-09-14T11:41:23.831Z  WARN 5745 --- [kisansarthi-backend] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
+2026-09-14T11:41:16.977Z  INFO 5745 --- [kisansarthi-backend] [           main] k.r.DistrictAuthorizationIntegrationTest : Starting DistrictAuthorizationIntegrationTest using Java 21.0.12 with PID 5745 (started by root in /app/applet/backend)
+2026-09-14T11:41:16.978Z  INFO 5745 --- [kisansarthi-backend] [           main] k.r.DistrictAuthorizationIntegrationTest : The following 1 profile is active: "test"
+2026-09-14T11:41:17.493Z  INFO 5745 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Multiple Spring Data modules found, entering strict repository configuration mode
+2026-09-14T11:41:17.494Z  INFO 5745 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Bootstrapping Spring Data JPA repositories in DEFAULT mode.
+2026-09-14T11:41:17.522Z  INFO 5745 --- [kisansarthi-backend] [           main] .s.d.r.c.RepositoryConfigurationDelegate : Finished Spring Data repository scanning in 28 ms. Found 14 JPA repository interfaces.
+2026-09-14T11:41:17.753Z  INFO 5745 --- [kisansarthi-backend] [           main] o.hibernate.jpa.internal.util.LogHelper  : HHH000204: Processing PersistenceUnitInfo [name: default]
+2026-09-14T11:41:17.755Z  INFO 5745 --- [kisansarthi-backend] [           main] o.h.c.internal.RegionFactoryInitiator    : HHH000026: Second-level cache disabled
+2026-09-14T11:41:17.765Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.o.j.p.SpringPersistenceUnitInfo      : No LoadTimeWeaver setup: ignoring JPA class transformer
+2026-09-14T11:41:17.765Z  INFO 5745 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Starting...
+2026-09-14T11:41:17.768Z  INFO 5745 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.pool.HikariPool        : HikariPool-3 - Added connection conn20: url=jdbc:h2:mem:kisansarthi_auth_test user=SA
+2026-09-14T11:41:17.768Z  INFO 5745 --- [kisansarthi-backend] [           main] com.zaxxer.hikari.HikariDataSource       : HikariPool-3 - Start completed.
+2026-09-14T11:41:17.769Z  WARN 5745 --- [kisansarthi-backend] [           main] org.hibernate.orm.deprecation            : HHH90000025: H2Dialect does not need to be specified explicitly using 'hibernate.dialect' (remove the property setting and it will be selected by default)
+2026-09-14T11:41:18.089Z  INFO 5745 --- [kisansarthi-backend] [           main] o.h.e.t.j.p.i.JtaPlatformInitiator       : HHH000489: No JTA platform available (set 'hibernate.transaction.jta.platform' to enable JTA platform integration)
+2026-09-14T11:41:18.150Z  INFO 5745 --- [kisansarthi-backend] [           main] j.LocalContainerEntityManagerFactoryBean : Initialized JPA EntityManagerFactory for persistence unit 'default'
+2026-09-14T11:41:19.087Z  WARN 5745 --- [kisansarthi-backend] [           main] JpaBaseConfiguration$JpaWebConfiguration : spring.jpa.open-in-view is enabled by default. Therefore, database queries may be performed during view rendering. Explicitly configure spring.jpa.open-in-view to disable this warning
+2026-09-14T11:41:19.175Z  WARN 5745 --- [kisansarthi-backend] [           main] .s.s.UserDetailsServiceAutoConfiguration : 
 
-Using generated security password: 3bb1c958-69c1-4011-8d37-ea5fe59cfe18
+Using generated security password: b507e644-0d49-47fb-9e10-816f1ad250ce
 
 This generated password is for development use only. Your security configuration must be updated before running your application in production.
 
-2026-09-14T11:41:23.834Z  INFO 5745 --- [kisansarthi-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
-2026-09-14T11:41:24.118Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
-2026-09-14T11:41:24.856Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
-2026-09-14T11:41:24.857Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@1ef92e82]]
-2026-09-14T11:41:24.858Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
-2026-09-14T11:41:24.867Z  INFO 5745 --- [kisansarthi-backend] [           main] c.k.report.ReportServiceIntegrationTest  : Started ReportServiceIntegrationTest in 3.391 seconds (process running for 46.288)
+2026-09-14T11:41:19.177Z  INFO 5745 --- [kisansarthi-backend] [           main] r$InitializeUserDetailsManagerConfigurer : Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager
+2026-09-14T11:41:19.624Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.b.a.e.web.EndpointLinksResolver      : Exposing 3 endpoints beneath base path '/actuator'
+2026-09-14T11:41:20.220Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.b.t.m.w.SpringBootMockServletContext : Initializing Spring TestDispatcherServlet ''
+2026-09-14T11:41:20.221Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Initializing Servlet ''
+2026-09-14T11:41:20.223Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.t.web.servlet.TestDispatcherServlet  : Completed initialization in 2 ms
+2026-09-14T11:41:20.267Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Starting...
+2026-09-14T11:41:20.267Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : BrokerAvailabilityEvent[available=true, SimpleBrokerMessageHandler [org.springframework.messaging.simp.broker.DefaultSubscriptionRegistry@6a58967e]]
+2026-09-14T11:41:20.268Z  INFO 5745 --- [kisansarthi-backend] [           main] o.s.m.s.b.SimpleBrokerMessageHandler     : Started.
+2026-09-14T11:41:20.274Z  INFO 5745 --- [kisansarthi-backend] [           main] k.r.DistrictAuthorizationIntegrationTest : Started DistrictAuthorizationIntegrationTest in 3.356 seconds (process running for 41.695)
+2026-09-14T11:41:20.655Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_58d58484 assigned to [Sehore] attempted to access district [Ujjain]
+2026-09-14T11:41:20.657Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
 ]]></system-out>
   </testcase>
-  <testcase name="testWeightedDockageCalculation" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.018"/>
-  <testcase name="testPaymentAnalytics" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.295"/>
-  <testcase name="testQualityAndWeighmentReport" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.014"/>
-  <testcase name="testTimeSeries" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.05"/>
-  <testcase name="testCsvStreaming" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.018"/>
-  <testcase name="testProcurementRegister" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.016"/>
-  <testcase name="testStatewideOverview" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.068"/>
-  <testcase name="testCsvStreamingEscapingAndHindi" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.019"/>
-  <testcase name="testDistrictStats" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.027"/>
-  <testcase name="testMandiPerformance" classname="com.kisansarthi.report.ReportServiceIntegrationTest" time="0.059"/>
+  <testcase name="testDistrictOfficer_bookingById_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.119">
+    <system-out><![CDATA[2026-09-14T11:41:20.874Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_91d50517 attempted to access resource in district [Ujjain] but is assigned to [Sehore]
+2026-09-14T11:41:20.875Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access resources in district: Sehore
+]]></system-out>
+  </testcase>
+  <testcase name="testDistrictOfficer_districtStats_scopedToAssignedDistrict" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.098"/>
+  <testcase name="testDistrictOfficer_bottlenecks_scopedToAssignedDistrict" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.102"/>
+  <testcase name="testDistrictOfficer_procurementRegister_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.076">
+    <system-out><![CDATA[2026-09-14T11:41:21.154Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_4855910c assigned to [Sehore] attempted to access district [Ujjain]
+2026-09-14T11:41:21.155Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+]]></system-out>
+  </testcase>
+  <testcase name="testAdmin_anyDistrict_returns200" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.097"/>
+  <testcase name="testDistrictOfficer_ownDistrict_returns200" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.032"/>
+  <testcase name="testDistrictOfficer_anotherDistrict_returns403" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.021">
+    <system-out><![CDATA[2026-09-14T11:41:21.311Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_94bcc20e assigned to [Sehore] attempted to access district [Ujjain]
+2026-09-14T11:41:21.311Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+]]></system-out>
+  </testcase>
+  <testcase name="testDistrictOfficer_omittedDistrict_returnsOnlyAssignedDistrict" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.059"/>
+  <testcase name="testDistrictOfficer_procurementCsv_districtIsolation" classname="com.kisansarthi.report.DistrictAuthorizationIntegrationTest" time="0.087">
+    <system-out><![CDATA[2026-09-14T11:41:21.460Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.auth.SecurityAuthorizationService    : Access Denied: District Officer do_sehore_4a4fa243 assigned to [Sehore] attempted to access district [Ujjain]
+2026-09-14T11:41:21.460Z  WARN 5745 --- [kisansarthi-backend] [           main] c.k.common.GlobalExceptionHandler        : Access denied: Access denied: You are only authorized to access district: Sehore
+]]></system-out>
+  </testcase>
 </testsuite>

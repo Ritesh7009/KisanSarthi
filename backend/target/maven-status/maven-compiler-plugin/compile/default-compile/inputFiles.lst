@@ -14,6 +14,8 @@
 /app/applet/backend/src/main/java/com/kisansarthi/auth/OtpService.java
 /app/applet/backend/src/main/java/com/kisansarthi/auth/RefreshTokenRequest.java
 /app/applet/backend/src/main/java/com/kisansarthi/auth/Role.java
+/app/applet/backend/src/main/java/com/kisansarthi/auth/SecurityAuthorizationService.java
+/app/applet/backend/src/main/java/com/kisansarthi/auth/SecurityUserContext.java
 /app/applet/backend/src/main/java/com/kisansarthi/auth/SendOtpRequest.java
 /app/applet/backend/src/main/java/com/kisansarthi/auth/User.java
 /app/applet/backend/src/main/java/com/kisansarthi/auth/UserDto.java

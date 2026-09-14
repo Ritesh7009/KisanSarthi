@@ -25,6 +25,11 @@ public interface FarmerRepository extends JpaRepository<Farmer, UUID> {
 
     @Query("SELECT f.district, COUNT(f) FROM Farmer f GROUP BY f.district")
     List<Object[]> countFarmersByDistrict();
+
+    @Query("SELECT f.district, COUNT(f) FROM Farmer f WHERE LOWER(f.district) = LOWER(:district) GROUP BY f.district")
+    List<Object[]> countFarmersForSingleDistrict(@Param("district") String district);
+
+    long countByDistrictIgnoreCase(String district);
 }
 
 
