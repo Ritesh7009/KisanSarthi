@@ -1,5 +1,8 @@
 package com.kisansarthi.booking;
 
+import com.kisansarthi.auth.Role;
+import com.kisansarthi.auth.User;
+import com.kisansarthi.auth.UserRepository;
 import com.kisansarthi.common.*;
 import com.kisansarthi.crop.Crop;
 import com.kisansarthi.crop.CropRepository;
@@ -24,6 +27,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.domain.Page;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.TestPropertySource;
 
@@ -64,6 +70,9 @@ public class BookingRemediationIntegrationTest {
     private FarmerRepository farmerRepository;
 
     @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
     private CropRepository cropRepository;
 
     @Autowired
@@ -93,9 +102,20 @@ public class BookingRemediationIntegrationTest {
     private Mandi testMandi;
     private Crop testCrop;
     private Farmer testFarmer;
+    private User testUser;
     private MandiSlot testSlot;
 
+    private void setAuth(String username, Role role) {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                username,
+                "N/A",
+                List.of(new SimpleGrantedAuthority(role.name()))
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
     private void cleanTestData() {
+        SecurityContextHolder.clearContext();
         queueEventRepository.deleteAllInBatch();
         queueStateRepository.findAll().forEach(qs -> {
             if (qs.getActiveBooking() != null) {
@@ -111,6 +131,7 @@ public class BookingRemediationIntegrationTest {
         sequenceRepository.deleteAllInBatch();
         slotRepository.deleteAllInBatch();
         farmerRepository.deleteAllInBatch();
+        userRepository.deleteAllInBatch();
         cropRepository.deleteAllInBatch();
         mandiRepository.deleteAllInBatch();
     }
@@ -145,7 +166,18 @@ public class BookingRemediationIntegrationTest {
         testCrop.setMoistureLimitPct(new BigDecimal("12.00"));
         testCrop = cropRepository.save(testCrop);
 
+        testUser = new User();
+        testUser.setUsername("9826099999");
+        testUser.setPasswordHash("hashed_password");
+        testUser.setPhone("9826099999");
+        testUser.setRole(Role.ROLE_FARMER);
+        testUser.setActive(true);
+        testUser.setCreatedAt(Instant.now());
+        testUser.setUpdatedAt(Instant.now());
+        testUser = userRepository.save(testUser);
+
         testFarmer = new Farmer();
+        testFarmer.setUser(testUser);
         testFarmer.setKisanId("KISAN-9826099999");
         testFarmer.setName("Mukesh Yadav");
         testFarmer.setPhone("9826099999");
@@ -154,6 +186,8 @@ public class BookingRemediationIntegrationTest {
         testFarmer.setVillage("Phanda");
         testFarmer.setBankAccountLast4("9999");
         testFarmer.setIfscCode("SBIN0002222");
+        testFarmer.setCreatedAt(Instant.now());
+        testFarmer.setUpdatedAt(Instant.now());
         testFarmer = farmerRepository.save(testFarmer);
 
         testSlot = new MandiSlot();
@@ -180,6 +214,7 @@ public class BookingRemediationIntegrationTest {
     @Test
     @DisplayName("Verify pagination on /api/v1/bookings/my: page boundaries, max size 100 capping, and createdAt DESC ordering")
     void testFarmerBookingsPagination() {
+        setAuth(testUser.getUsername(), Role.ROLE_FARMER);
         // Create 25 bookings for testFarmer
         List<BookingResponse> createdList = new ArrayList<>();
         for (int i = 1; i <= 25; i++) {
@@ -193,7 +228,7 @@ public class BookingRemediationIntegrationTest {
             req.setVehicleNumber(String.format("MP-04-T-%04d", i));
             req.setEstimatedYieldQuintals(new BigDecimal("10.00"));
 
-            BookingResponse res = bookingService.createBooking(req, "pag-key-" + i, null);
+            BookingResponse res = bookingService.createBooking(req, "pag-key-" + i, testUser.getUsername());
             createdList.add(res);
         }
 
@@ -219,6 +254,7 @@ public class BookingRemediationIntegrationTest {
     @Test
     @DisplayName("Verify requested quantity semantics with RoundingMode.CEILING for 2.00, 2.01, 2.50, 2.99, 3.00")
     void testRequestedQuantityCeilingSemantics() {
+        setAuth(testUser.getUsername(), Role.ROLE_FARMER);
         BigDecimal[] testYields = {
                 new BigDecimal("2.00"),
                 new BigDecimal("2.01"),
@@ -261,7 +297,7 @@ public class BookingRemediationIntegrationTest {
             req.setVehicleNumber("MP-04-AB-1234");
             req.setEstimatedYieldQuintals(yield);
 
-            BookingResponse response = bookingService.createBooking(req, "ceil-key-" + i, null);
+            BookingResponse response = bookingService.createBooking(req, "ceil-key-" + i, testUser.getUsername());
             assertNotNull(response);
 
             // Stored entity must retain exact decimal precision (e.g. 2.01 or 2.50)
@@ -272,7 +308,7 @@ public class BookingRemediationIntegrationTest {
             assertEquals(expectedCeil, updatedSlot.getBookedQuintals());
 
             // On cancellation, the exact same integer ceiling reservation must be cleanly deducted
-            bookingService.cancelBooking(response.getId(), "testUser");
+            bookingService.cancelBooking(response.getId(), testUser.getUsername());
             MandiSlot releasedSlot = slotRepository.findById(specificSlot.getId()).orElseThrow();
             assertEquals(0, releasedSlot.getBookedQuintals());
             assertEquals(0, releasedSlot.getBookedFarmers());
@@ -295,6 +331,7 @@ public class BookingRemediationIntegrationTest {
             executor.submit(() -> {
                 try {
                     startLatch.await();
+                    setAuth(testUser.getUsername(), Role.ROLE_FARMER);
                     CreateBookingRequest req = new CreateBookingRequest();
                     req.setFarmerId(testFarmer.getId());
                     req.setMandiId(testMandi.getId());
@@ -305,7 +342,7 @@ public class BookingRemediationIntegrationTest {
                     req.setVehicleNumber(String.format("MP-04-CC-%04d", index + 1));
                     req.setEstimatedYieldQuintals(new BigDecimal("15.00"));
 
-                    BookingResponse res = bookingService.createBooking(req, "db-lock-key-" + index, null);
+                    BookingResponse res = bookingService.createBooking(req, "db-lock-key-" + index, testUser.getUsername());
                     responses.add(res);
                 } catch (Exception e) {
                     failures.incrementAndGet();
@@ -334,6 +371,7 @@ public class BookingRemediationIntegrationTest {
     @Test
     @DisplayName("Verify full lifecycle: Booking -> Weighment -> Payment DBT -> Precision check")
     void testFullProcurementFinancialLifecycle() {
+        setAuth(testUser.getUsername(), Role.ROLE_FARMER);
         CreateBookingRequest req = new CreateBookingRequest();
         req.setFarmerId(testFarmer.getId());
         req.setMandiId(testMandi.getId());
@@ -344,10 +382,11 @@ public class BookingRemediationIntegrationTest {
         req.setVehicleNumber("MP-04-FP-1111");
         req.setEstimatedYieldQuintals(new BigDecimal("50.00"));
 
-        BookingResponse booking = bookingService.createBooking(req, "full-life-key", null);
+        BookingResponse booking = bookingService.createBooking(req, "full-life-key", testUser.getUsername());
         assertNotNull(booking);
 
         // Record Gross (65.25 Qtl) and Tare (15.25 Qtl) -> Net = 50.00 Qtl
+        setAuth("op1", Role.ROLE_ADMIN);
         WeighmentDto weighmentReq = new WeighmentDto();
         weighmentReq.setGrossWeightQuintals(new BigDecimal("65.25"));
         weighmentReq.setTareWeightQuintals(new BigDecimal("15.25"));
@@ -360,10 +399,12 @@ public class BookingRemediationIntegrationTest {
         assertEquals(0, expectedPayout.compareTo(recorded.getNetPayableAmount()));
 
         // Complete Procurement
+        setAuth("officer-patil", Role.ROLE_ADMIN);
         BookingResponse cert = weighmentService.completeProcurement(booking.getId(), "officer-patil");
         assertEquals(BookingStatus.PROCUREMENT_COMPLETED.name(), cert.getStatus());
 
         // Initiate DBT Payment
+        setAuth("accountant1", Role.ROLE_ADMIN);
         PaymentDto paymentDto = paymentService.initiatePayment(booking.getId(), new PaymentDto());
         assertEquals("PROCESSING", paymentDto.getPaymentStatus());
         assertEquals(0, expectedPayout.compareTo(paymentDto.getNetPayableAmount()));
@@ -379,6 +420,7 @@ public class BookingRemediationIntegrationTest {
     @Test
     @DisplayName("Verify cancellation atomicity and failure handling: simulated capacity release failure rolls back entire transaction")
     void testCancellationFailureRollsBackTransaction() {
+        setAuth(testUser.getUsername(), Role.ROLE_FARMER);
         // 1. Create a booking associated with a custom slot
         MandiSlot customSlot = new MandiSlot();
         customSlot.setId("slot-cancel-fail-test");
@@ -404,7 +446,7 @@ public class BookingRemediationIntegrationTest {
         req.setVehicleNumber("MP-04-CF-1234");
         req.setEstimatedYieldQuintals(new BigDecimal("30.00"));
 
-        BookingResponse created = bookingService.createBooking(req, "cancel-atomic-key", null);
+        BookingResponse created = bookingService.createBooking(req, "cancel-atomic-key", testUser.getUsername());
         assertNotNull(created);
         UUID bookingId = created.getId();
 
@@ -415,7 +457,7 @@ public class BookingRemediationIntegrationTest {
         slotRepository.deleteById(customSlot.getId());
 
         // 3. Attempting to cancel must fail and propagate exception (SlotNotFoundException)
-        assertThrows(Exception.class, () -> bookingService.cancelBooking(bookingId, "mukesh"));
+        assertThrows(Exception.class, () -> bookingService.cancelBooking(bookingId, testUser.getUsername()));
 
         // 4. Verify transaction rollback: Booking MUST remain BOOKED, NOT CANCELLED
         Booking postFailureBooking = bookingRepository.findById(bookingId).orElseThrow();
@@ -431,6 +473,7 @@ public class BookingRemediationIntegrationTest {
     @Test
     @DisplayName("Verify cancellation restrictions: repeated cancellation and cancellation after procurement progression")
     void testCancellationRestrictionsAndProgression() {
+        setAuth(testUser.getUsername(), Role.ROLE_FARMER);
         CreateBookingRequest req = new CreateBookingRequest();
         req.setFarmerId(testFarmer.getId());
         req.setMandiId(testMandi.getId());
@@ -441,17 +484,19 @@ public class BookingRemediationIntegrationTest {
         req.setVehicleNumber("MP-04-CR-5678");
         req.setEstimatedYieldQuintals(new BigDecimal("20.00"));
 
-        BookingResponse created = bookingService.createBooking(req, "cancel-prog-key", null);
+        BookingResponse created = bookingService.createBooking(req, "cancel-prog-key", testUser.getUsername());
         assertNotNull(created);
         UUID bookingId = created.getId();
 
         // Progress booking: BOOKED -> GATE_CALLED -> GATE_ENTERED -> WEIGHING (cancellation no longer permitted once in WEIGHING)
+        setAuth("admin", Role.ROLE_ADMIN);
         bookingService.transitionStatus(bookingId, BookingStatus.GATE_CALLED);
         bookingService.transitionStatus(bookingId, BookingStatus.GATE_ENTERED);
         bookingService.transitionStatus(bookingId, BookingStatus.WEIGHING);
 
         // Attempting to cancel while in WEIGHING must be rejected (cannot cancel once weighing has started)
-        assertThrows(BusinessException.class, () -> bookingService.cancelBooking(bookingId, "mukesh"));
+        setAuth(testUser.getUsername(), Role.ROLE_FARMER);
+        assertThrows(BusinessException.class, () -> bookingService.cancelBooking(bookingId, testUser.getUsername()));
 
         Booking curBooking = bookingRepository.findById(bookingId).orElseThrow();
         assertEquals(BookingStatus.WEIGHING, curBooking.getStatus());

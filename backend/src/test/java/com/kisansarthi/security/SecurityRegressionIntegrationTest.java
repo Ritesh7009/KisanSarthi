@@ -88,6 +88,9 @@ public class SecurityRegressionIntegrationTest {
     @Autowired
     private com.kisansarthi.queue.QueueStateRepository queueStateRepository;
 
+    @Autowired
+    private SecurityAuthorizationService authorizationService;
+
     private User userFarmerA;
     private User userFarmerB;
     private User userOperatorMandiA;
@@ -468,6 +471,156 @@ public class SecurityRegressionIntegrationTest {
         // Second cancellation fails safely
         assertThrows(BookingAlreadyCancelledException.class, () -> {
             bookingService.cancelBooking(bookingA.getId(), userFarmerA.getUsername());
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-1: verifyBookingAccess with no security context throws AccessDeniedException")
+    public void testVerifyBookingAccessNoSecurityContextThrows() {
+        SecurityContextHolder.clearContext();
+        Booking booking = new Booking();
+        booking.setFarmer(farmerA);
+        booking.setMandi(mandiA);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyBookingAccess(booking);
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-2: verifyBookingAccess with non-existent user throws AccessDeniedException")
+    public void testVerifyBookingAccessNonExistentUserThrows() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                "non_existent_user_12345",
+                "N/A",
+                List.of(new SimpleGrantedAuthority("ROLE_FARMER"))
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
+        Booking booking = new Booking();
+        booking.setFarmer(farmerA);
+        booking.setMandi(mandiA);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyBookingAccess(booking);
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-3: verifyBookingAccess with farmer user lacking farmer profile throws AccessDeniedException")
+    public void testVerifyBookingAccessFarmerLackingProfileThrows() {
+        User orphanFarmerUser = new User();
+        orphanFarmerUser.setUsername("orphan_farmer_user");
+        orphanFarmerUser.setPasswordHash("hashed_pass");
+        orphanFarmerUser.setPhone("9826099999");
+        orphanFarmerUser.setRole(Role.ROLE_FARMER);
+        orphanFarmerUser.setActive(true);
+        orphanFarmerUser.setCreatedAt(Instant.now());
+        orphanFarmerUser.setUpdatedAt(Instant.now());
+        orphanFarmerUser = userRepository.save(orphanFarmerUser);
+
+        setAuth(orphanFarmerUser);
+
+        Booking booking = new Booking();
+        booking.setFarmer(farmerA);
+        booking.setMandi(mandiA);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyBookingAccess(booking);
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-4: verifyBookingCancellation with no security context and null username throws AccessDeniedException")
+    public void testVerifyBookingCancellationNoContextNullUsernameThrows() {
+        SecurityContextHolder.clearContext();
+        Booking booking = new Booking();
+        booking.setFarmer(farmerA);
+        booking.setMandi(mandiA);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyBookingCancellation(booking, null);
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-5: verifyMandiAccess with unassigned mandi operator throws AccessDeniedException")
+    public void testVerifyMandiAccessUnassignedOperatorThrows() {
+        User unassignedOperator = new User();
+        unassignedOperator.setUsername("unassigned_op");
+        unassignedOperator.setPasswordHash("hashed_pass");
+        unassignedOperator.setPhone("9826088888");
+        unassignedOperator.setRole(Role.ROLE_MANDI_OPERATOR);
+        unassignedOperator.setMandiId(null); // Unassigned!
+        unassignedOperator.setActive(true);
+        unassignedOperator.setCreatedAt(Instant.now());
+        unassignedOperator.setUpdatedAt(Instant.now());
+        unassignedOperator = userRepository.save(unassignedOperator);
+
+        setAuth(unassignedOperator);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyMandiAccess(mandiA.getId());
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-6: verifyDistrictAccess with unassigned district officer throws AccessDeniedException")
+    public void testVerifyDistrictAccessUnassignedDistrictOfficerThrows() {
+        User unassignedDO = new User();
+        unassignedDO.setUsername("unassigned_do");
+        unassignedDO.setPasswordHash("hashed_pass");
+        unassignedDO.setPhone("9826077777");
+        unassignedDO.setRole(Role.ROLE_DISTRICT_OFFICER);
+        unassignedDO.setMandiId(null); // Unassigned district!
+        unassignedDO.setActive(true);
+        unassignedDO.setCreatedAt(Instant.now());
+        unassignedDO.setUpdatedAt(Instant.now());
+        unassignedDO = userRepository.save(unassignedDO);
+
+        setAuth(unassignedDO);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyDistrictAccess("Sehore");
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-7: resolveAndAuthorizeDistrict with no auth throws AccessDeniedException")
+    public void testResolveAndAuthorizeDistrictNoAuthThrows() {
+        SecurityContextHolder.clearContext();
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.resolveAndAuthorizeDistrict("Sehore");
+        });
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.resolveAndAuthorizeDistrict(null);
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-8: resolveAndAuthorizeDistrict with unassigned district officer throws AccessDeniedException")
+    public void testResolveAndAuthorizeDistrictUnassignedDistrictOfficerThrows() {
+        User unassignedDO = new User();
+        unassignedDO.setUsername("unassigned_do_2");
+        unassignedDO.setPasswordHash("hashed_pass");
+        unassignedDO.setPhone("9826066666");
+        unassignedDO.setRole(Role.ROLE_DISTRICT_OFFICER);
+        unassignedDO.setMandiId(null); // Unassigned
+        unassignedDO.setActive(true);
+        unassignedDO.setCreatedAt(Instant.now());
+        unassignedDO.setUpdatedAt(Instant.now());
+        unassignedDO = userRepository.save(unassignedDO);
+
+        setAuth(unassignedDO);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.resolveAndAuthorizeDistrict("Sehore");
+        });
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.resolveAndAuthorizeDistrict(null);
         });
     }
 }
