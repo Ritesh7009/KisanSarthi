@@ -15,8 +15,8 @@ com/kisansarthi/auth/UserRepository.class
 com/kisansarthi/report/ReportService.class
 com/kisansarthi/common/InvalidBookingQuantityException.class
 com/kisansarthi/queue/QueueController.class
-com/kisansarthi/booking/CreateBookingRequest.class
 com/kisansarthi/KisanSarthiApplication.class
+com/kisansarthi/booking/CreateBookingRequest.class
 com/kisansarthi/common/ApiError.class
 com/kisansarthi/notification/NotificationService.class
 com/kisansarthi/mandi/MandiService.class
