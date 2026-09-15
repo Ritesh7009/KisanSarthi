@@ -1,4 +1,0 @@
--------------------------------------------------------------------------------
-Test set: com.kisansarthi.security.SecurityRegressionIntegrationTest
--------------------------------------------------------------------------------
-Tests run: 18, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 4.358 s -- in com.kisansarthi.security.SecurityRegressionIntegrationTest
