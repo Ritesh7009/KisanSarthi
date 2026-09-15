@@ -193,10 +193,12 @@ public class SecurityAuthorizationService {
 
     /**
      * Verifies whether the current user is authorized to access a mandi.
+     * Enforces strict non-null, non-blank mandi ID requirement for mandi-specific operations.
      */
     public void verifyMandiAccess(String mandiId) {
         if (mandiId == null || mandiId.isBlank()) {
-            return;
+            log.warn("Access Denied: Attempted to access mandi with null/blank mandiId");
+            throw new AccessDeniedException("Access denied: Mandi ID is required");
         }
 
         Optional<SecurityUserContext> contextOpt = getCurrentUserContext();
@@ -240,6 +242,17 @@ public class SecurityAuthorizationService {
         }
 
         throw new AccessDeniedException("Access denied: Unauthorized role: " + context.getRole());
+    }
+
+    /**
+     * Verifies mandi access when mandiId is optional (e.g., in aggregate district or statewide reporting).
+     * If mandiId is null or blank, access is allowed to continue for aggregate reporting.
+     * If mandiId is provided, validates that the caller has access to that specific mandi.
+     */
+    public void verifyOptionalMandiAccess(String mandiId) {
+        if (mandiId != null && !mandiId.isBlank()) {
+            verifyMandiAccess(mandiId.trim());
+        }
     }
 
     /**

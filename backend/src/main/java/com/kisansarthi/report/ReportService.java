@@ -751,7 +751,7 @@ public class ReportService {
     public List<ProcurementRegisterRowDto> getProcurementRegister(String district, String mandiId, String cropId) {
         String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
         // If a mandiId is specified, verify district access for it
-        authorizationService.verifyMandiAccess(mandiId);
+        authorizationService.verifyOptionalMandiAccess(mandiId);
 
         // Enforce strict server-side bounding (max 200) for legacy non-paginated compatibility endpoint
         org.springframework.data.domain.PageRequest pageRequest =
@@ -766,7 +766,7 @@ public class ReportService {
             String district, String mandiId, String cropId, String search, int page, int size
     ) {
         String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
-        authorizationService.verifyMandiAccess(mandiId);
+        authorizationService.verifyOptionalMandiAccess(mandiId);
 
         int boundedSize = Math.max(1, Math.min(size, ReportConstants.MAX_REGISTER_PAGE_SIZE));
         int boundedPage = Math.max(0, page);
@@ -798,6 +798,10 @@ public class ReportService {
         authorizationService.verifyMandiAccess(mandiId);
     }
 
+    public void verifyOptionalMandiAccess(String mandiId) {
+        authorizationService.verifyOptionalMandiAccess(mandiId);
+    }
+
     /**
      * Memory-bounded progressive streaming of procurement register directly to an output stream in batches.
      */
@@ -810,7 +814,7 @@ public class ReportService {
             java.io.OutputStream outputStream
     ) throws java.io.IOException {
         String effectiveDistrict = authorizationService.resolveAndAuthorizeDistrict(district);
-        authorizationService.verifyMandiAccess(mandiId);
+        authorizationService.verifyOptionalMandiAccess(mandiId);
         streamProcurementRegisterCsvWithAuthorizedDistrict(effectiveDistrict, mandiId, cropId, search, outputStream);
     }
 

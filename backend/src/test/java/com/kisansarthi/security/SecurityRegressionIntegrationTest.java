@@ -624,4 +624,46 @@ public class SecurityRegressionIntegrationTest {
             authorizationService.resolveAndAuthorizeDistrict(null);
         });
     }
+
+    @Test
+    @DisplayName("FailClosed-9: verifyMandiAccess with null or blank mandiId throws AccessDeniedException")
+    public void testVerifyMandiAccessNullOrBlankThrows() {
+        setAuth(userOperatorMandiA);
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyMandiAccess(null);
+        });
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyMandiAccess("");
+        });
+
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyMandiAccess("   ");
+        });
+    }
+
+    @Test
+    @DisplayName("FailClosed-10: verifyOptionalMandiAccess allows null/blank for aggregate queries but validates when provided")
+    public void testVerifyOptionalMandiAccess() {
+        setAuth(userOperatorMandiA);
+
+        // Null or blank allowed for aggregate queries
+        assertDoesNotThrow(() -> {
+            authorizationService.verifyOptionalMandiAccess(null);
+        });
+        assertDoesNotThrow(() -> {
+            authorizationService.verifyOptionalMandiAccess("");
+        });
+
+        // Valid assigned mandi allowed
+        assertDoesNotThrow(() -> {
+            authorizationService.verifyOptionalMandiAccess(mandiA.getId());
+        });
+
+        // Unassigned mandi throws AccessDeniedException
+        assertThrows(AccessDeniedException.class, () -> {
+            authorizationService.verifyOptionalMandiAccess(mandiB.getId());
+        });
+    }
 }
