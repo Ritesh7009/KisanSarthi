@@ -177,8 +177,13 @@ async function executeGeminiWithFallback<T>(prompt: string, fallbackData: T): Pr
 // ==========================================
 async function startServer() {
   const app = express();
+  // Port 3000 is mandatory for the infrastructure nginx reverse proxy
   const PORT = 3000;
   const server = http.createServer(app);
+
+  server.on('error', (err: { code?: string; message?: string }) => {
+    console.error(`Server error on port ${PORT}:`, err?.message || err);
+  });
 
   // WebSocket Server on /ws
   const wss = new WebSocketServer({ server, path: '/ws' });
@@ -2446,24 +2451,35 @@ Respond strictly in JSON format matching this schema:
     });
   }
 
-  // Listen on port 3000 (Mandatory for sandbox reverse proxy)
+  // Listen on port 3000 (Mandatory for AI Studio nginx reverse proxy)
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`KisanSarthi Unified Server running on http://0.0.0.0:${PORT} with WebSocket on /ws`);
   });
 
-  // Support Google Cloud Run dynamic port assignment in production deployments
+  // Support environments with dynamic $PORT (e.g. standalone Cloud Run containers without nginx)
   const envPort = process.env.PORT ? parseInt(process.env.PORT, 10) : null;
-  if (process.env.NODE_ENV === 'production' && envPort && envPort !== PORT) {
+  if (envPort && !isNaN(envPort) && envPort !== PORT) {
     try {
       const prodIngress = http.createServer(app);
-      prodIngress.on('error', (err: { message?: string }) => {
-        console.warn(`Cloud Run dynamic port ${envPort} listener notice:`, err?.message || err);
+      prodIngress.on('upgrade', (request, socket, head) => {
+        if (request.url?.startsWith('/ws')) {
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+          });
+        }
+      });
+      prodIngress.on('error', (err: { code?: string; message?: string }) => {
+        if (err?.code === 'EADDRINUSE') {
+          console.log(`Port ${envPort} is managed by upstream ingress reverse proxy; routing to port ${PORT}`);
+        } else {
+          console.warn(`Dynamic port ${envPort} listener notice:`, err?.message || err);
+        }
       });
       prodIngress.listen(envPort, '0.0.0.0', () => {
-        console.log(`Google Cloud Run production listener active on http://0.0.0.0:${envPort}`);
+        console.log(`Dynamic Cloud Run listener active on http://0.0.0.0:${envPort}`);
       });
     } catch (err: unknown) {
-      console.warn('Production listener notice:', err);
+      console.warn('Dynamic port listener init notice:', err);
     }
   }
 }

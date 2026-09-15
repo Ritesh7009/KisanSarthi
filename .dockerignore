@@ -1,0 +1,10 @@
+node_modules
+.git
+.gitignore
+backend/target
+build
+dist
+.env
+.env.local
+npm-debug.log
+*.log
