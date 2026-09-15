@@ -1,6 +1,7 @@
 package com.kisansarthi.security;
 
 import com.kisansarthi.auth.Role;
+import com.kisansarthi.auth.SecurityAuthorizationService;
 import com.kisansarthi.auth.User;
 import com.kisansarthi.auth.UserRepository;
 import com.kisansarthi.booking.*;

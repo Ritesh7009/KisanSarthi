@@ -27,6 +27,7 @@
 /app/applet/backend/src/main/java/com/kisansarthi/booking/BookingResponse.java
 /app/applet/backend/src/main/java/com/kisansarthi/booking/BookingService.java
 /app/applet/backend/src/main/java/com/kisansarthi/booking/BookingStatus.java
+/app/applet/backend/src/main/java/com/kisansarthi/booking/BookingTransactionExecutor.java
 /app/applet/backend/src/main/java/com/kisansarthi/booking/CreateBookingRequest.java
 /app/applet/backend/src/main/java/com/kisansarthi/booking/MandiTokenSequence.java
 /app/applet/backend/src/main/java/com/kisansarthi/booking/MandiTokenSequenceRepository.java

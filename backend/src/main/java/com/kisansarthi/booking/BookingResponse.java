@@ -39,15 +39,21 @@ public class BookingResponse {
         r.setId(b.getId());
         r.setTokenNumber(b.getTokenNumber());
         r.setTokenSequence(b.getTokenSequence());
-        r.setFarmerId(b.getFarmer().getId());
-        r.setFarmerName(b.getFarmer().getName());
-        r.setFarmerPhone(b.getFarmer().getPhone());
-        r.setDistrict(b.getFarmer().getDistrict());
-        r.setVillage(b.getFarmer().getVillage());
-        r.setMandiId(b.getMandi().getId());
-        r.setMandiName(b.getMandi().getName());
-        r.setCropId(b.getCrop().getId());
-        r.setCropName(b.getCrop().getName());
+        if (b.getFarmer() != null) {
+            r.setFarmerId(b.getFarmer().getId());
+            r.setFarmerName(b.getFarmer().getName());
+            r.setFarmerPhone(b.getFarmer().getPhone());
+            r.setDistrict(b.getFarmer().getDistrict());
+            r.setVillage(b.getFarmer().getVillage());
+        }
+        if (b.getMandi() != null) {
+            r.setMandiId(b.getMandi().getId());
+            r.setMandiName(b.getMandi().getName());
+        }
+        if (b.getCrop() != null) {
+            r.setCropId(b.getCrop().getId());
+            r.setCropName(b.getCrop().getName());
+        }
         r.setSlotId(b.getSlotId());
         r.setScheduledDate(b.getScheduledDate());
         r.setTimeSlot(b.getTimeSlot());

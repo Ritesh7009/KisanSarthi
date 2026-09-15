@@ -105,6 +105,10 @@ public class SlotService {
 
         authorizationService.verifyMandiAccess(existing.getMandiId());
 
+        if (update.getMaxCapacityQuintals() < 0 || update.getMaxFarmers() < 0) {
+            throw new IllegalArgumentException("Slot capacity and max farmers cannot be negative");
+        }
+
         // Capacity reduction check: cannot reduce max below currently booked amounts
         if (update.getMaxCapacityQuintals() > 0 && update.getMaxCapacityQuintals() < existing.getBookedQuintals()) {
             throw new CapacityReductionNotAllowedException(

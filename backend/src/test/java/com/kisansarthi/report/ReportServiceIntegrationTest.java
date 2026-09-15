@@ -1,5 +1,6 @@
 package com.kisansarthi.report;
 
+import com.kisansarthi.auth.Role;
 import com.kisansarthi.booking.Booking;
 import com.kisansarthi.booking.BookingRepository;
 import com.kisansarthi.booking.BookingStatus;
@@ -15,11 +16,15 @@ import com.kisansarthi.slot.MandiSlot;
 import com.kisansarthi.slot.SlotRepository;
 import com.kisansarthi.weighment.Weighment;
 import com.kisansarthi.weighment.WeighmentRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -75,6 +80,13 @@ public class ReportServiceIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        UsernamePasswordAuthenticationToken auth = new UsernamePasswordAuthenticationToken(
+                "admin",
+                "N/A",
+                List.of(new SimpleGrantedAuthority(Role.ROLE_ADMIN.name()))
+        );
+        SecurityContextHolder.getContext().setAuthentication(auth);
+
         String uid = UUID.randomUUID().toString().substring(0, 8);
 
         testMandi = new Mandi();
@@ -354,5 +366,10 @@ public class ReportServiceIntegrationTest {
         assertTrue(csv.contains("Token Number"));
         assertTrue(csv.contains("Ramesh Patel"));
         assertTrue(csv.contains("48.50"));
+    }
+
+    @AfterEach
+    void tearDown() {
+        SecurityContextHolder.clearContext();
     }
 }

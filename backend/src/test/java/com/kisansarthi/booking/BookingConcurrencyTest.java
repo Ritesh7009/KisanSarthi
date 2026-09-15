@@ -152,6 +152,18 @@ public class BookingConcurrencyTest {
         q.setActiveBooking(null);
         queueStateRepository.save(q);
 
+        // Ensure admin user exists
+        userRepository.findByUsername("admin").orElseGet(() -> {
+            User admin = new User();
+            admin.setUsername("admin");
+            admin.setPasswordHash("hashed_password");
+            admin.setRole(Role.ROLE_ADMIN);
+            admin.setActive(true);
+            admin.setCreatedAt(Instant.now());
+            admin.setUpdatedAt(Instant.now());
+            return userRepository.save(admin);
+        });
+
         // Ensure test crop exists
         testCrop = cropRepository.findById("crop-wheat-test").orElseGet(() -> {
             Crop c = new Crop();
@@ -335,6 +347,7 @@ public class BookingConcurrencyTest {
                         responses.add(res);
                     }
                 } catch (Exception e) {
+                    System.err.println("IDEMP_TEST_ERR: " + e.getClass().getName() + " -> " + e.getMessage());
                     failureCount.incrementAndGet();
                 } finally {
                     finishLatch.countDown();
@@ -347,7 +360,8 @@ public class BookingConcurrencyTest {
         executor.shutdown();
 
         assertTrue(completed, "All 20 concurrent requests should complete within 30 seconds");
-        assertTrue(responses.size() > 0, "At least 1 response returned");
+        assertEquals(0, failureCount.get(), "Zero requests should fail with unhandled exceptions under idempotent race");
+        assertEquals(20, responses.size(), "All 20 requests must receive a response");
 
         // Verify that only 1 booking was created with this idempotency key in DB
         List<Booking> bookingsInDb = bookingRepository.findAll().stream()
@@ -356,7 +370,7 @@ public class BookingConcurrencyTest {
         assertEquals(1, bookingsInDb.size(), "Exactly 1 booking record must exist in DB for the shared idempotency key");
 
         // Verify all successful responses returned the identical booking ID and token number
-        String singleBookingId = bookingsInDb.get(0).getId();
+        UUID singleBookingId = bookingsInDb.get(0).getId();
         String singleTokenNumber = bookingsInDb.get(0).getTokenNumber();
         for (BookingResponse r : responses) {
             assertEquals(singleBookingId, r.getId(), "All responses must return the same booking ID");
@@ -442,6 +456,7 @@ public class BookingConcurrencyTest {
     void testSimultaneousQueueAdvancement() throws InterruptedException {
         // Seed 10 initial bookings
         for (int i = 0; i < 10; i++) {
+            setAuth(testFarmers.get(i).getPhone(), Role.ROLE_FARMER);
             CreateBookingRequest req = new CreateBookingRequest();
             req.setFarmerId(testFarmers.get(i).getId());
             req.setMandiId(testMandi.getId());
@@ -451,7 +466,7 @@ public class BookingConcurrencyTest {
             req.setVehicleType("TRACTOR_TROLLEY");
             req.setVehicleNumber(String.format("MP-04-T-%04d", i + 1));
             req.setEstimatedYieldQuintals(new BigDecimal("30.00"));
-            bookingService.createBooking(req, "seed-key-" + i, null);
+            bookingService.createBooking(req, "seed-key-" + i, testFarmers.get(i).getPhone());
         }
 
         queueStateRepository.updateCounters(testMandi.getId(), 0, 10, 10);
@@ -468,6 +483,7 @@ public class BookingConcurrencyTest {
             executor.submit(() -> {
                 try {
                     start.await();
+                    setAuth("admin", Role.ROLE_ADMIN);
                     QueueEventDto dto = queueService.advanceQueue(testMandi.getId(), "Operator-" + operatorId);
                     results.add(dto);
                 } catch (Exception e) {

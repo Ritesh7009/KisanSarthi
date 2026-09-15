@@ -16,8 +16,19 @@ import java.util.UUID;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
-    Optional<Booking> findByIdempotencyKey(String idempotencyKey);
-    Optional<Booking> findByTokenNumber(String tokenNumber);
+    @Query("SELECT b FROM Booking b " +
+           "JOIN FETCH b.farmer f " +
+           "JOIN FETCH b.mandi m " +
+           "JOIN FETCH b.crop c " +
+           "WHERE b.idempotencyKey = :idempotencyKey")
+    Optional<Booking> findByIdempotencyKey(@Param("idempotencyKey") String idempotencyKey);
+
+    @Query("SELECT b FROM Booking b " +
+           "JOIN FETCH b.farmer f " +
+           "JOIN FETCH b.mandi m " +
+           "JOIN FETCH b.crop c " +
+           "WHERE b.tokenNumber = :tokenNumber")
+    Optional<Booking> findByTokenNumber(@Param("tokenNumber") String tokenNumber);
     List<Booking> findByFarmerIdOrderByCreatedAtDesc(UUID farmerId);
     @Query(value = "SELECT b FROM Booking b " +
            "LEFT JOIN FETCH b.farmer f " +

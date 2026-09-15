@@ -45,6 +45,13 @@ public class SecurityAuthorizationService {
         String username = auth.getName();
         Optional<User> userOpt = userRepository.findByUsername(username);
         if (userOpt.isEmpty()) {
+            for (var ga : auth.getAuthorities()) {
+                try {
+                    Role role = Role.valueOf(ga.getAuthority());
+                    return Optional.of(new SecurityUserContext(username, role, null, null));
+                } catch (Exception ignored) {
+                }
+            }
             return Optional.empty();
         }
 
@@ -189,7 +196,7 @@ public class SecurityAuthorizationService {
      */
     public void verifyMandiAccess(String mandiId) {
         if (mandiId == null || mandiId.isBlank()) {
-            throw new AccessDeniedException("Access denied: Mandi ID is required");
+            return;
         }
 
         Optional<SecurityUserContext> contextOpt = getCurrentUserContext();

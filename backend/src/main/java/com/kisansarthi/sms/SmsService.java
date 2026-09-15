@@ -32,45 +32,46 @@ public class SmsService {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
-                    try {
-                        action.run();
-                    } catch (Exception e) {
-                        log.error("Failed to execute post-commit SMS action: {}", e.getMessage(), e);
-                    }
+                    dispatchAsync(action);
                 }
             });
         } else {
-            action.run();
+            dispatchAsync(action);
         }
     }
 
-    @Async
+    private void dispatchAsync(Runnable action) {
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                action.run();
+            } catch (Exception e) {
+                log.error("Failed to execute SMS action: {}", e.getMessage(), e);
+            }
+        });
+    }
+
     public void sendOtp(String phone, String message) {
         executeAfterCommitOrImmediate(() -> dispatchSms(phone, "Farmer", null, message, "OTP"));
     }
 
-    @Async
     public void sendBookingConfirmation(String phone, String farmerName, String tokenNumber, String mandiName, String date, String slot) {
         String msg = String.format("e-Uparjan: Namaste %s ji. Aapka slot book ho gaya hai. Token: %s, Mandi: %s, Date: %s, Slot: %s. Kripya samay par pahuchein.",
                 farmerName, tokenNumber, mandiName, date, slot);
         executeAfterCommitOrImmediate(() -> dispatchSms(phone, farmerName, null, msg, "BOOKING_CONFIRMATION"));
     }
 
-    @Async
     public void sendTokenCalledNotification(String phone, String farmerName, String tokenNumber, String bay) {
         String msg = String.format("e-Uparjan URGENT: %s ji, Token %s ko %s par pravesh hetu bulaya gaya hai. Turant Gate par sampark karein.",
                 farmerName, tokenNumber, bay);
         executeAfterCommitOrImmediate(() -> dispatchSms(phone, farmerName, null, msg, "TOKEN_CALLED"));
     }
 
-    @Async
     public void sendStatusUpdate(String phone, String farmerName, String tokenNumber, String status) {
         String msg = String.format("e-Uparjan Update: Token %s ka status ab '%s' hai. - MP Mandi Board",
                 tokenNumber, status);
         executeAfterCommitOrImmediate(() -> dispatchSms(phone, farmerName, null, msg, "STATUS_UPDATE"));
     }
 
-    @Async
     public void sendPaymentNotification(String phone, String farmerName, String tokenNumber, String amount, String dbtRef) {
         String msg = String.format("e-Uparjan DBT: %s ji, Token %s ke Rs %s ka bhugtan DBT Ref %s se aapke bank khate mein bhej diya gaya hai.",
                 farmerName, tokenNumber, amount, dbtRef);
@@ -84,7 +85,7 @@ public class SmsService {
     public SmsResult sendSms(String phone, String farmerName, String message) {
         if (TransactionSynchronizationManager.isActualTransactionActive()) {
             executeAfterCommitOrImmediate(() -> dispatchSms(phone, farmerName, null, message, "GENERAL"));
-            return SmsResult.success("ASYNC_TX_PENDING", "QUEUED_POST_COMMIT");
+            return SmsResult.accepted("ASYNC_TX_PENDING", "QUEUED_POST_COMMIT");
         }
         return dispatchSms(phone, farmerName, null, message, "GENERAL");
     }

@@ -45,6 +45,7 @@ public class BookingService {
     private final SlotRepository slotRepository;
     private final SlotEventPublisher eventPublisher;
     private final SecurityAuthorizationService authorizationService;
+    private final BookingTransactionExecutor transactionExecutor;
 
     public BookingService(
             BookingRepository bookingRepository,
@@ -57,7 +58,8 @@ public class BookingService {
             SlotService slotService,
             SlotRepository slotRepository,
             SlotEventPublisher eventPublisher,
-            SecurityAuthorizationService authorizationService) {
+            SecurityAuthorizationService authorizationService,
+            BookingTransactionExecutor transactionExecutor) {
         this.bookingRepository = bookingRepository;
         this.sequenceRepository = sequenceRepository;
         this.farmerRepository = farmerRepository;
@@ -69,9 +71,9 @@ public class BookingService {
         this.slotRepository = slotRepository;
         this.eventPublisher = eventPublisher;
         this.authorizationService = authorizationService;
+        this.transactionExecutor = transactionExecutor;
     }
 
-    @Transactional(isolation = Isolation.READ_COMMITTED)
     public BookingResponse createBooking(CreateBookingRequest request, String idempotencyKey, String authenticatedUsername) {
         // 1. Idempotency Check: if request was already processed, return original
         if (idempotencyKey != null && !idempotencyKey.isBlank()) {
@@ -97,128 +99,78 @@ public class BookingService {
         int requestedQty = yield.setScale(0, RoundingMode.CEILING).intValue();
 
         // 4. Resolve Farmer with Impersonation Protection
-        Farmer farmer;
+        Farmer farmer = resolveFarmer(request, authenticatedUsername);
+
+        // 5. Execute within dedicated isolated transaction boundary
+        try {
+            return transactionExecutor.executeBookingTransaction(
+                    request, idempotencyKey, farmer, date, requestedQty, yield
+            );
+        } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+            if (idempotencyKey != null && !idempotencyKey.isBlank() && isIdempotencyKeyViolation(ex)) {
+                log.info("Idempotency unique constraint race caught for key {}. Fetching winning transaction booking.", idempotencyKey);
+                for (int i = 0; i < 20; i++) {
+                    Optional<Booking> winner = bookingRepository.findByIdempotencyKey(idempotencyKey);
+                    if (winner.isPresent()) {
+                        return BookingResponse.fromEntity(winner.get());
+                    }
+                    try {
+                        Thread.sleep(50);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                Optional<Booking> winner = bookingRepository.findByIdempotencyKey(idempotencyKey);
+                if (winner.isPresent()) {
+                    return BookingResponse.fromEntity(winner.get());
+                }
+            }
+            throw ex;
+        }
+    }
+
+    private boolean isIdempotencyKeyViolation(org.springframework.dao.DataIntegrityViolationException ex) {
+        String msg = ex.getMessage();
+        if (msg != null && (msg.toLowerCase().contains("idempotency_key") || msg.toLowerCase().contains("uk_bookings_idempotency_key"))) {
+            return true;
+        }
+        Throwable cause = ex.getCause();
+        while (cause != null) {
+            String causeMsg = cause.getMessage();
+            if (causeMsg != null && (causeMsg.toLowerCase().contains("idempotency_key") || causeMsg.toLowerCase().contains("uk_bookings_idempotency_key"))) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private Farmer resolveFarmer(CreateBookingRequest request, String authenticatedUsername) {
         if (authenticatedUsername != null && !authenticatedUsername.isBlank()) {
             User user = userRepository.findByUsername(authenticatedUsername).orElse(null);
             if (user != null && user.getRole() == com.kisansarthi.auth.Role.ROLE_FARMER) {
-                farmer = farmerRepository.findByUserId(user.getId())
+                Farmer farmer = farmerRepository.findByUserId(user.getId())
                         .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found for user: " + authenticatedUsername));
                 if (request.getFarmerId() != null && !farmer.getId().equals(request.getFarmerId())) {
                     throw new org.springframework.security.access.AccessDeniedException("Access denied: You are only authorized to create bookings for your own farmer profile");
                 }
+                return farmer;
             } else if (request.getFarmerId() != null) {
-                farmer = farmerRepository.findById(request.getFarmerId())
+                return farmerRepository.findById(request.getFarmerId())
                         .orElseThrow(() -> new ResourceNotFoundException("Farmer not found: " + request.getFarmerId()));
             } else if (user != null) {
-                farmer = farmerRepository.findByUserId(user.getId())
+                return farmerRepository.findByUserId(user.getId())
                         .orElseThrow(() -> new ResourceNotFoundException("Farmer profile not found for user: " + authenticatedUsername));
             } else {
                 throw new ResourceNotFoundException("Farmer not found");
             }
         } else if (request.getFarmerId() != null) {
-            farmer = farmerRepository.findById(request.getFarmerId())
+            return farmerRepository.findById(request.getFarmerId())
                     .orElseThrow(() -> new ResourceNotFoundException("Farmer not found: " + request.getFarmerId()));
         } else {
             throw new BusinessException("FARMER_REQUIRED", "Farmer ID or authenticated session is required to create a booking");
         }
-
-        // Authorize Mandi Access for Mandi Operators / Managers
-        authorizationService.verifyMandiAccess(request.getMandiId());
-
-        // 5. Resolve Mandi and Crop (Acquires pessimistic write lock on Mandi row to serialize first-time sequence initialization across concurrent instances)
-        Mandi mandi = mandiRepository.findByIdForUpdate(request.getMandiId())
-                .orElseThrow(() -> new ResourceNotFoundException("Mandi not found: " + request.getMandiId()));
-        Crop crop = cropRepository.findById(request.getCropId())
-                .orElseThrow(() -> new ResourceNotFoundException("Crop not found: " + request.getCropId()));
-
-        // 6. Concurrency Protection on Slot: Lock selected slot row and validate capacity
-        MandiSlot slot = slotService.lockAndGetSlot(mandi.getId(), request.getSlotId(), request.getTimeSlot());
-
-        if ("CLOSED".equalsIgnoreCase(slot.getStatus())) {
-            throw new SlotClosedException("Selected slot [" + slot.getSlotLabel() + "] is currently closed for bookings.");
-        }
-
-        int availableQuintals = slot.getMaxCapacityQuintals() - slot.getBookedQuintals();
-        int availableFarmers = slot.getMaxFarmers() - slot.getBookedFarmers();
-
-        if (requestedQty > availableQuintals) {
-            throw new InsufficientSlotCapacityException(String.format(
-                    "Insufficient capacity in slot [%s]. Requested: %d Qtl, Available: %d Qtl",
-                    slot.getSlotLabel(), requestedQty, Math.max(0, availableQuintals)));
-        }
-
-        if (availableFarmers <= 0 || slot.getBookedFarmers() >= slot.getMaxFarmers()) {
-            throw new FarmerLimitReachedException(String.format(
-                    "Farmer limit reached for slot [%s]. Max farmers: %d, currently booked: %d",
-                    slot.getSlotLabel(), slot.getMaxFarmers(), slot.getBookedFarmers()));
-        }
-
-        // Reserve capacity on slot
-        slot.setBookedQuintals(slot.getBookedQuintals() + requestedQty);
-        slot.setBookedFarmers(slot.getBookedFarmers() + 1);
-        slot.recalculateStatus();
-        slot = slotRepository.saveAndFlush(slot);
-        log.info("SLOT DEBUG: slotId={}, bookedQuintals={}, bookedFarmers={}", slot.getId(), slot.getBookedQuintals(), slot.getBookedFarmers());
-
-        // 7. Concurrency Protection on Sequence: Lock sequence row for this Mandi and Date
-        MandiTokenSequence sequence = sequenceRepository.findByMandiIdAndProcurementDateForUpdate(mandi.getId(), date)
-                .orElseGet(() -> {
-                    MandiTokenSequence newSeq = new MandiTokenSequence(mandi.getId(), date, 0);
-                    return sequenceRepository.saveAndFlush(newSeq);
-                });
-
-        int nextSeq = sequence.getCurrentSequence() + 1;
-        sequence.setCurrentSequence(nextSeq);
-        sequenceRepository.saveAndFlush(sequence);
-
-        // Format Official Token Number (e.g. MP-SEH-042)
-        String distPrefix = (mandi.getDistrict() != null && mandi.getDistrict().trim().length() >= 3)
-                ? mandi.getDistrict().trim().substring(0, 3).toUpperCase()
-                : "MPM";
-        String tokenNumber = String.format("MP-%s-%03d", distPrefix, nextSeq);
-
-        // 8. Build and Save Booking Entity
-        Booking booking = new Booking();
-        booking.setIdempotencyKey(idempotencyKey);
-        booking.setTokenNumber(tokenNumber);
-        booking.setTokenSequence(nextSeq);
-        booking.setFarmer(farmer);
-        booking.setMandi(mandi);
-        booking.setCrop(crop);
-        booking.setSlotId(slot.getId());
-        booking.setScheduledDate(date);
-        booking.setTimeSlot(slot.getSlotLabel());
-        booking.setVehicleType(request.getVehicleType());
-        booking.setVehicleNumber(request.getVehicleNumber());
-        booking.setEstimatedYieldQuintals(yield);
-        booking.setAcreage(request.getAcreage());
-        booking.setHarvestDate(request.getHarvestDate());
-        booking.setStatus(BookingStatus.BOOKED);
-        booking.setQrCodeData("https://euparjan.mp.gov.in/gate-pass?t=" + tokenNumber);
-
-        Booking saved = bookingRepository.saveAndFlush(booking);
-
-        // 9. Update Mandi total token stats atomically
-        mandiRepository.incrementTokenCounts(mandi.getId());
-
-        // 10. Send confirmation SMS asynchronously
-        smsService.sendBookingConfirmation(
-                farmer.getPhone(),
-                farmer.getName(),
-                tokenNumber,
-                mandi.getName(),
-                date.toString(),
-                slot.getSlotLabel()
-        );
-
-        // 11. Publish real-time events post-commit
-        eventPublisher.publishAfterCommit(mandi.getId(), "BOOKING_CREATED", BookingResponse.fromEntity(saved));
-        eventPublisher.publishAfterCommit(mandi.getId(), "SLOT_CAPACITY_CHANGED", slot);
-
-        log.info("Official Token {} successfully generated and committed for farmer {} at mandi {} in slot {}",
-                tokenNumber, farmer.getPhone(), mandi.getId(), slot.getSlotLabel());
-
-        return BookingResponse.fromEntity(saved);
     }
 
     @Transactional

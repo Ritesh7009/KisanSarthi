@@ -11,6 +11,8 @@ import com.kisansarthi.sms.SmsService;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDate;
 import java.time.Instant;
@@ -149,18 +151,31 @@ public class QueueService {
         dto.setTimestamp(OffsetDateTime.now());
         dto.setNotes(event.getNotes());
 
-        try {
-            messagingTemplate.convertAndSend("/topic/mandi/" + mandiId + "/queue", dto);
-            messagingTemplate.convertAndSend("/topic/mandi/" + mandiId + "/status", dto);
+        Runnable broadcast = () -> {
+            try {
+                messagingTemplate.convertAndSend("/topic/mandi/" + mandiId + "/queue", dto);
+                messagingTemplate.convertAndSend("/topic/mandi/" + mandiId + "/status", dto);
 
-            if (matchedBooking != null && matchedBooking.getFarmer() != null) {
-                messagingTemplate.convertAndSend(
-                        "/topic/farmer/" + matchedBooking.getFarmer().getId() + "/notifications",
-                        dto
-                );
+                if (matchedBooking != null && matchedBooking.getFarmer() != null) {
+                    messagingTemplate.convertAndSend(
+                            "/topic/farmer/" + matchedBooking.getFarmer().getId() + "/notifications",
+                            dto
+                    );
+                }
+            } catch (Exception e) {
+                // Non-fatal logging for WebSocket broadcast in tests or standalone
             }
-        } catch (Exception e) {
-            // Non-fatal logging for WebSocket broadcast in tests or standalone
+        };
+
+        if (TransactionSynchronizationManager.isActualTransactionActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    broadcast.run();
+                }
+            });
+        } else {
+            broadcast.run();
         }
 
         return dto;
