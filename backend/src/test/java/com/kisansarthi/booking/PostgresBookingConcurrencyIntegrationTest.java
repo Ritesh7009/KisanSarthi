@@ -41,10 +41,10 @@ import static org.junit.jupiter.api.Assertions.*;
 @SpringBootTest
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
-        "spring.datasource.url=jdbc:postgresql://localhost:5432/kisansarthi_pg_test",
+        "spring.datasource.url=jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:kisansarthi_pg_test}",
         "spring.datasource.driver-class-name=org.postgresql.Driver",
-        "spring.datasource.username=postgres",
-        "spring.datasource.password=",
+        "spring.datasource.username=${DB_USER:postgres}",
+        "spring.datasource.password=${DB_PASSWORD:}",
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.flyway.enabled=true",
         "spring.flyway.baseline-on-migrate=true",
