@@ -347,6 +347,46 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Spring Boot Canonical Backend Gateway Proxy
+  const SPRING_BOOT_URL = (process.env.SPRING_BOOT_URL || process.env.BACKEND_URL || '').replace(/\/$/, '');
+  if (SPRING_BOOT_URL) {
+    console.log(`[Production Gateway] Active Spring Boot backend detected at: ${SPRING_BOOT_URL}. Routing live /api/* traffic to Spring Boot.`);
+    app.use('/api', async (req, res, next) => {
+      try {
+        const targetUrl = `${SPRING_BOOT_URL}${req.originalUrl}`;
+        const headers: Record<string, string> = {};
+        for (const [key, value] of Object.entries(req.headers)) {
+          if (value && key.toLowerCase() !== 'host' && key.toLowerCase() !== 'content-length') {
+            headers[key] = Array.isArray(value) ? value.join(', ') : String(value);
+          }
+        }
+
+        const fetchOptions: RequestInit = {
+          method: req.method,
+          headers,
+        };
+
+        if (req.method !== 'GET' && req.method !== 'HEAD' && req.body && Object.keys(req.body).length > 0) {
+          fetchOptions.body = JSON.stringify(req.body);
+          headers['content-type'] = 'application/json';
+        }
+
+        const backendResponse = await fetch(targetUrl, fetchOptions);
+        res.status(backendResponse.status);
+        backendResponse.headers.forEach((val, key) => {
+          if (key.toLowerCase() !== 'content-encoding' && key.toLowerCase() !== 'transfer-encoding') {
+            res.setHeader(key, val);
+          }
+        });
+        const responseData = await backendResponse.arrayBuffer();
+        res.send(Buffer.from(responseData));
+      } catch (err: any) {
+        console.warn(`[Production Gateway] Failed to proxy to Spring Boot (${err?.message}). Falling back to local handler.`);
+        next();
+      }
+    });
+  }
+
   // Health check
   app.get(['/api/health', '/api/v1/health'], (req, res) => {
     res.json({

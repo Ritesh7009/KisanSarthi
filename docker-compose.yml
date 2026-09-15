@@ -66,6 +66,9 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: kisansarthi-frontend
     restart: always
+    environment:
+      SPRING_BOOT_URL: http://backend:8080
+      PORT: 3000
     ports:
       - "3000:3000"
     depends_on:
