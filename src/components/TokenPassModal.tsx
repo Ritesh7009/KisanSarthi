@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { X, Printer, QrCode, CheckCircle, Clock, MapPin, AlertTriangle, ShieldCheck, Tractor } from 'lucide-react';
 import { SlotBooking, Language } from '../types';
 
@@ -17,8 +18,24 @@ export const TokenPassModal: React.FC<Props> = ({ booking, isOpen, onClose, lang
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 my-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+      {/* Animated Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+      />
+
+      {/* Animated Modal Window */}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95, y: 16 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        exit={{ opacity: 0, scale: 0.95, y: 16 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+        className="relative bg-white rounded-3xl shadow-2xl max-w-lg w-full overflow-hidden border border-slate-200 my-4 z-10"
+      >
         {/* Modal Top Actions */}
         <div className="bg-[#1B4332] text-white px-5 py-3.5 flex items-center justify-between">
           <span className="text-xs font-bold uppercase tracking-wider text-[#D4E09B] flex items-center gap-1.5">
@@ -26,19 +43,23 @@ export const TokenPassModal: React.FC<Props> = ({ booking, isOpen, onClose, lang
             Official APMC Gate Entry Pass
           </span>
           <div className="flex items-center gap-2">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={handlePrint}
               className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 cursor-pointer transition-colors"
             >
               <Printer className="w-3.5 h-3.5 text-[#D4E09B]" />
               <span>Print</span>
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={onClose}
               className="p-1.5 rounded-xl hover:bg-white/10 text-white/70 hover:text-white cursor-pointer transition-colors"
             >
               <X className="w-4 h-4" />
-            </button>
+            </motion.button>
           </div>
         </div>
 
@@ -142,21 +163,25 @@ export const TokenPassModal: React.FC<Props> = ({ booking, isOpen, onClose, lang
 
         {/* Modal Footer */}
         <div className="p-4 bg-white border-t border-slate-100 flex justify-end gap-2">
-          <button
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
             onClick={onClose}
             className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider text-slate-600 hover:text-slate-800 cursor-pointer transition-colors"
           >
             Close
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileHover={{ scale: 1.04 }}
+            whileTap={{ scale: 0.96 }}
             onClick={handlePrint}
             className="px-5 py-2.5 bg-[#1B4332] hover:bg-[#2D6A4F] text-white text-xs font-bold uppercase tracking-wider rounded-xl shadow-xs flex items-center gap-2 cursor-pointer transition-colors"
           >
             <Printer className="w-4 h-4 text-[#D4E09B]" />
             <span>Print Token Slip</span>
-          </button>
+          </motion.button>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

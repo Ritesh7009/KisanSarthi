@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Tractor,
   Calendar,
@@ -324,90 +325,54 @@ export const FarmerDashboard: React.FC<Props> = ({
     <div className="space-y-6">
       {/* Mobile-Friendly Horizontal Navigation Bar */}
       <div className="bg-white rounded-2xl shadow-xs border border-slate-200 p-1.5 overflow-x-auto scrollbar-none flex items-center gap-1">
-        <button
-          id="farmer-tab-live-token"
-          onClick={() => setActiveTab('TOKEN')}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-            activeTab === 'TOKEN'
-              ? 'bg-[#1B4332] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Clock className="w-3.5 h-3.5" />
-          <span>{t.tabActiveToken}</span>
-          {latestBooking && (
-            <span className="ml-1 bg-[#D4E09B] text-[#1B4332] font-mono text-[10px] font-black px-1.5 py-0.2 rounded-full">
-              {latestBooking.tokenNumber.split('-')[2] || '38'}
-            </span>
-          )}
-        </button>
-
-        <button
-          id="farmer-tab-book-slot"
-          onClick={() => setActiveTab('BOOK')}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-            activeTab === 'BOOK'
-              ? 'bg-[#1B4332] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Calendar className="w-3.5 h-3.5" />
-          <span>{t.tabBookSlot}</span>
-        </button>
-
-        <button
-          id="farmer-tab-profit-calc"
-          onClick={() => setActiveTab('CALCULATOR')}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-            activeTab === 'CALCULATOR'
-              ? 'bg-[#1B4332] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Coins className="w-3.5 h-3.5" />
-          <span>{t.tabProfitCalc}</span>
-        </button>
-
-        <button
-          id="farmer-tab-mandi-queues"
-          onClick={() => setActiveTab('MANDI_QUEUES')}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-            activeTab === 'MANDI_QUEUES'
-              ? 'bg-[#1B4332] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>{t.tabMandiQueues}</span>
-        </button>
-
-        <button
-          id="farmer-tab-msp-rates"
-          onClick={() => setActiveTab('MSP_RATES')}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-            activeTab === 'MSP_RATES'
-              ? 'bg-[#1B4332] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <TrendingUp className="w-3.5 h-3.5" />
-          <span>{t.tabMspRates}</span>
-        </button>
-
-        <button
-          id="farmer-tab-weather"
-          onClick={() => setActiveTab('WEATHER')}
-          className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-            activeTab === 'WEATHER'
-              ? 'bg-[#1B4332] text-white shadow-xs'
-              : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
-          }`}
-        >
-          <CloudSun className="w-3.5 h-3.5" />
-          <span>{t.tabWeather}</span>
-        </button>
+        {[
+          { key: 'TOKEN', label: t.tabActiveToken, icon: Clock, id: 'farmer-tab-live-token', badge: latestBooking ? (latestBooking.tokenNumber.split('-')[2] || '38') : null },
+          { key: 'BOOK', label: t.tabBookSlot, icon: Calendar, id: 'farmer-tab-book-slot' },
+          { key: 'CALCULATOR', label: t.tabProfitCalc, icon: Coins, id: 'farmer-tab-profit-calc' },
+          { key: 'MANDI_QUEUES', label: t.tabMandiQueues, icon: Layers, id: 'farmer-tab-mandi-queues' },
+          { key: 'MSP_RATES', label: t.tabMspRates, icon: TrendingUp, id: 'farmer-tab-msp-rates' },
+          { key: 'WEATHER', label: t.tabWeather, icon: CloudSun, id: 'farmer-tab-weather' },
+        ].map((tab) => {
+          const Icon = tab.icon;
+          const isActive = activeTab === tab.key;
+          return (
+            <button
+              key={tab.key}
+              id={tab.id}
+              onClick={() => setActiveTab(tab.key as any)}
+              className={`relative flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-colors cursor-pointer ${
+                isActive ? 'text-white' : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+              }`}
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="activeFarmerTabPill"
+                  className="absolute inset-0 bg-[#1B4332] rounded-xl shadow-xs -z-0"
+                  transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                />
+              )}
+              <span className="relative z-10 flex items-center gap-1.5">
+                <Icon className="w-3.5 h-3.5" />
+                <span>{tab.label}</span>
+                {tab.badge && (
+                  <span className="ml-1 bg-[#D4E09B] text-[#1B4332] font-mono text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                    {tab.badge}
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
       </div>
 
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
       {/* ========================================================= */}
       {/* TAB 1: ACTIVE LIVE TOKEN & QUEUE TRACKER */}
       {/* ========================================================= */}
@@ -1663,6 +1628,8 @@ export const FarmerDashboard: React.FC<Props> = ({
           </div>
         </div>
       )}
+        </motion.div>
+      </AnimatePresence>
     </div>
   );
 };

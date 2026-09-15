@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Building2,
   Shield,
@@ -230,94 +231,54 @@ export const AdminDashboard: React.FC<Props> = ({
 
         {/* Sub Navigation */}
         <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none mt-6 pt-4 border-t border-slate-100 text-xs">
-          <button
-            onClick={() => setAdminTab('QUEUE_CTRL')}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'QUEUE_CTRL'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <Scale className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>Live Queue & Weighbridge</span>
-          </button>
-          <button
-            onClick={() => setAdminTab('SLOTS')}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'SLOTS'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>Capacity & Daily Slots</span>
-          </button>
-          <button
-            onClick={() => setAdminTab('MSP_MGR')}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'MSP_MGR'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <TrendingUp className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>MSP & Bonus Rates</span>
-          </button>
-          <button
-            onClick={() => setAdminTab('REPORTS')}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'REPORTS'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <BarChart3 className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>District Analytics</span>
-          </button>
-          <button
-            onClick={() => setAdminTab('FARMER_LIST')}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'FARMER_LIST'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <FileSpreadsheet className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>Farmer Slips ({bookings.length})</span>
-          </button>
-          <button
-            id="admin-tab-farmers-db"
-            onClick={() => {
-              setAdminTab('FARMERS_DB');
-              fetchDbFarmers();
-            }}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'FARMERS_DB'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <Users className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>Registered Kisan DB ({registeredFarmers.length})</span>
-          </button>
-          <button
-            id="admin-tab-sms-dispatch"
-            onClick={() => {
-              setAdminTab('SMS_DISPATCH');
-              fetchDbLogs();
-            }}
-            className={`px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-all cursor-pointer ${
-              adminTab === 'SMS_DISPATCH'
-                ? 'bg-[#1B4332] text-white shadow-xs'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5 text-[#D4E09B]" />
-            <span>Real SMS Console ({smsLogs.length})</span>
-          </button>
+          {[
+            { key: 'QUEUE_CTRL', label: 'Live Queue & Weighbridge', icon: Scale },
+            { key: 'SLOTS', label: 'Capacity & Daily Slots', icon: Clock },
+            { key: 'MSP_MGR', label: 'MSP & Bonus Rates', icon: TrendingUp },
+            { key: 'REPORTS', label: 'District Analytics', icon: BarChart3 },
+            { key: 'FARMER_LIST', label: `Farmer Slips (${bookings.length})`, icon: FileSpreadsheet },
+            { key: 'FARMERS_DB', label: `Registered Kisan DB (${registeredFarmers.length})`, icon: Users, id: 'admin-tab-farmers-db', onClick: fetchDbFarmers },
+            { key: 'SMS_DISPATCH', label: `Real SMS Console (${smsLogs.length})`, icon: MessageSquare, id: 'admin-tab-sms-dispatch', onClick: fetchDbLogs },
+          ].map((tab) => {
+            const Icon = tab.icon;
+            const isActive = adminTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                id={tab.id}
+                onClick={() => {
+                  setAdminTab(tab.key as any);
+                  if (tab.onClick) tab.onClick();
+                }}
+                className={`relative px-3.5 py-2 rounded-xl font-bold uppercase tracking-wider text-[11px] flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
+                  isActive ? 'text-white' : 'text-slate-600 hover:text-slate-900 hover:bg-[#F3F6F1]'
+                }`}
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="activeAdminTabPill"
+                    className="absolute inset-0 bg-[#1B4332] rounded-xl shadow-xs -z-0"
+                    transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+                  />
+                )}
+                <span className="relative z-10 flex items-center gap-2">
+                  <Icon className="w-3.5 h-3.5 text-[#D4E09B]" />
+                  <span>{tab.label}</span>
+                </span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={adminTab}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -12 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+        >
       {/* ========================================================= */}
       {/* TAB 1: LIVE QUEUE CONTROLLER & WEIGHBRIDGE RECORDER */}
       {/* ========================================================= */}
@@ -907,6 +868,8 @@ export const AdminDashboard: React.FC<Props> = ({
           </div>
         </div>
       )}
+        </motion.div>
+      </AnimatePresence>
 
       {/* Admin SMS Dispatch Modal */}
       <AdminSmsDispatchModal

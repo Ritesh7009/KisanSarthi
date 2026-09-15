@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'motion/react';
 import {
   Bell,
   Globe,
@@ -43,11 +44,19 @@ export const Header: React.FC<Props> = ({
   const t = translations[language];
 
   return (
-    <header className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm">
+    <motion.header
+      initial={{ opacity: 0, y: -10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+      className="sticky top-0 z-40 bg-white border-b border-slate-200 shadow-sm"
+    >
       {/* Top micro-bar with MP Govt Branding */}
       <div className="bg-gradient-to-r from-[#1B4332] via-[#2D6A4F] to-[#1B4332] text-emerald-50 px-4 py-1 text-[11px] font-medium flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2 h-2 rounded-full bg-[#D4E09B] animate-pulse"></span>
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D4E09B] opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-[#D4E09B]"></span>
+          </span>
           <span className="tracking-tight">{t.govtTag}</span>
         </div>
         <div className="flex items-center gap-3">
@@ -59,7 +68,9 @@ export const Header: React.FC<Props> = ({
                 <span className="hidden sm:inline">{t.onlineSynced}</span>
               </span>
             ) : (
-              <button
+              <motion.button
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.96 }}
                 onClick={onManualSync}
                 className="inline-flex items-center gap-1 text-amber-100 bg-amber-950/50 px-2.5 py-0.5 rounded-full text-[10px] font-semibold hover:bg-amber-900 transition-colors cursor-pointer"
                 title="Click to attempt sync"
@@ -71,7 +82,7 @@ export const Header: React.FC<Props> = ({
                     {pendingSyncCount}
                   </span>
                 )}
-              </button>
+              </motion.button>
             )}
           </div>
         </div>
@@ -82,9 +93,13 @@ export const Header: React.FC<Props> = ({
         <div className="flex items-center justify-between gap-3">
           {/* Logo & Brand */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-[#2D6A4F] rounded-lg flex items-center justify-center text-white shadow-sm flex-shrink-0">
+            <motion.div
+              whileHover={{ rotate: [0, -6, 6, 0] }}
+              transition={{ duration: 0.4 }}
+              className="w-10 h-10 bg-[#2D6A4F] rounded-xl flex items-center justify-center text-white shadow-sm flex-shrink-0"
+            >
               <Tractor className="w-5 h-5 text-white" />
-            </div>
+            </motion.div>
             <div className="flex flex-col">
               <div className="flex items-center gap-2">
                 <span className="text-xl font-bold tracking-tight text-[#1B4332] leading-tight">
@@ -108,29 +123,43 @@ export const Header: React.FC<Props> = ({
               <span>{currentUser?.district ? `MP-${currentUser.district} Center` : 'MP-Sehore Center'}</span>
             </div>
 
-            {/* Role Switcher Pill (Sleek design) */}
-            <div className="flex bg-slate-100 p-1 rounded-full text-xs font-medium border border-slate-200/80">
+            {/* Role Switcher Pill with Animated Layout Transition */}
+            <div className="flex bg-slate-100 p-1 rounded-full text-xs font-medium border border-slate-200/80 relative">
               <button
                 id="role-switch-farmer"
                 onClick={() => onRoleSwitch('FARMER')}
-                className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`relative px-3.5 sm:px-4 py-1.5 rounded-full text-xs transition-colors cursor-pointer flex items-center gap-1.5 z-10 ${
                   role === 'FARMER'
-                    ? 'bg-white shadow-sm text-[#1B4332] font-bold'
+                    ? 'text-[#1B4332] font-bold'
                     : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
+                {role === 'FARMER' && (
+                  <motion.div
+                    layoutId="activeRolePill"
+                    className="absolute inset-0 bg-white rounded-full shadow-xs -z-10"
+                    transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                  />
+                )}
                 <UserCheck className="w-3.5 h-3.5" />
                 <span>{language === 'hi' ? 'किसान दृश्य' : language === 'mal' ? 'किसान दृश्य' : 'Farmer View'}</span>
               </button>
               <button
                 id="role-switch-admin"
                 onClick={() => onRoleSwitch('ADMIN')}
-                className={`px-3.5 sm:px-4 py-1.5 rounded-full text-xs transition-all cursor-pointer flex items-center gap-1.5 ${
+                className={`relative px-3.5 sm:px-4 py-1.5 rounded-full text-xs transition-colors cursor-pointer flex items-center gap-1.5 z-10 ${
                   role === 'ADMIN'
-                    ? 'bg-white shadow-sm text-[#1B4332] font-bold'
+                    ? 'text-[#1B4332] font-bold'
                     : 'text-slate-500 hover:text-slate-900'
                 }`}
               >
+                {role === 'ADMIN' && (
+                  <motion.div
+                    layoutId="activeRolePill"
+                    className="absolute inset-0 bg-white rounded-full shadow-xs -z-10"
+                    transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                  />
+                )}
                 <Shield className="w-3.5 h-3.5" />
                 <span>{language === 'hi' ? 'प्रशासन' : language === 'mal' ? 'मंडी साहेब' : 'Admin Console'}</span>
               </button>
@@ -140,7 +169,7 @@ export const Header: React.FC<Props> = ({
             <div className="flex items-center bg-slate-100 p-1 rounded-full border border-slate-200/80 text-xs font-medium">
               <button
                 onClick={() => onLanguageChange('en')}
-                className={`px-2.5 py-1 text-xs rounded-full transition-all ${
+                className={`px-2.5 py-1 text-xs rounded-full transition-all cursor-pointer ${
                   language === 'en'
                     ? 'bg-white text-[#1B4332] font-bold shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
@@ -150,7 +179,7 @@ export const Header: React.FC<Props> = ({
               </button>
               <button
                 onClick={() => onLanguageChange('hi')}
-                className={`px-2.5 py-1 text-xs rounded-full transition-all ${
+                className={`px-2.5 py-1 text-xs rounded-full transition-all cursor-pointer ${
                   language === 'hi'
                     ? 'bg-white text-[#1B4332] font-bold shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
@@ -160,7 +189,7 @@ export const Header: React.FC<Props> = ({
               </button>
               <button
                 onClick={() => onLanguageChange('mal')}
-                className={`px-2.5 py-1 text-xs rounded-full transition-all ${
+                className={`px-2.5 py-1 text-xs rounded-full transition-all cursor-pointer ${
                   language === 'mal'
                     ? 'bg-white text-[#1B4332] font-bold shadow-xs'
                     : 'text-slate-500 hover:text-slate-900'
@@ -171,8 +200,10 @@ export const Header: React.FC<Props> = ({
               </button>
             </div>
 
-            {/* Notification Bell with Badge */}
-            <button
+            {/* Notification Bell with Badge & tactile bounce */}
+            <motion.button
+              whileHover={{ scale: 1.08 }}
+              whileTap={{ scale: 0.92 }}
               id="notification-bell-btn"
               onClick={onOpenNotifications}
               className="relative p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer border border-slate-200/80"
@@ -180,11 +211,16 @@ export const Header: React.FC<Props> = ({
             >
               <Bell className="w-4 h-4 text-slate-700" />
               {unreadNotifsCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white ring-2 ring-white animate-pulse">
+                <motion.span
+                  initial={{ scale: 0 }}
+                  animate={{ scale: [1, 1.25, 1] }}
+                  transition={{ repeat: Infinity, repeatDelay: 3, duration: 0.6 }}
+                  className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-rose-600 text-[9px] font-bold text-white ring-2 ring-white"
+                >
                   {unreadNotifsCount}
-                </span>
+                </motion.span>
               )}
-            </button>
+            </motion.button>
 
             {/* Avatar Circle & User Details */}
             {currentUser && (
@@ -203,7 +239,9 @@ export const Header: React.FC<Props> = ({
                     {currentUser.district}
                   </p>
                 </div>
-                <button
+                <motion.button
+                  whileHover={{ scale: 1.03 }}
+                  whileTap={{ scale: 0.97 }}
                   id="logout-btn"
                   onClick={onLogout}
                   className="px-2.5 py-1 rounded-xl text-slate-500 hover:text-rose-700 hover:bg-rose-50 border border-slate-200 hover:border-rose-200 transition-colors cursor-pointer flex items-center gap-1.5 text-[11px] font-bold"
@@ -211,12 +249,12 @@ export const Header: React.FC<Props> = ({
                 >
                   <LogOut className="w-3.5 h-3.5 text-rose-500" />
                   <span className="hidden sm:inline">{language === 'hi' ? 'लॉगआउट' : 'Switch / Logout'}</span>
-                </button>
+                </motion.button>
               </div>
             )}
           </div>
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 };

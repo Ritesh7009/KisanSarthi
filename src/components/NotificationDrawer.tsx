@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   X,
   Bell,
@@ -42,8 +43,24 @@ export const NotificationDrawer: React.FC<Props> = ({
   });
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden bg-slate-900/60 backdrop-blur-xs flex justify-end">
-      <div className="w-full max-w-md bg-white h-full shadow-2xl flex flex-col animate-in slide-in-from-right duration-200">
+    <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+      {/* Animated Backdrop */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+        className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+      />
+
+      {/* Drawer Panel */}
+      <motion.div
+        initial={{ x: '100%' }}
+        animate={{ x: 0 }}
+        exit={{ x: '100%' }}
+        transition={{ type: 'spring', damping: 30, stiffness: 350 }}
+        className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10"
+      >
         {/* Drawer Header */}
         <div className="p-5 bg-[#1B4332] text-white flex items-center justify-between border-b border-[#2D6A4F]">
           <div className="flex items-center gap-3">
@@ -59,12 +76,14 @@ export const NotificationDrawer: React.FC<Props> = ({
               </p>
             </div>
           </div>
-          <button
+          <motion.button
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
             onClick={onClose}
             className="p-2 rounded-xl hover:bg-white/10 text-white/70 hover:text-white cursor-pointer transition-colors"
           >
             <X className="w-5 h-5" />
-          </button>
+          </motion.button>
         </div>
 
         {/* Quick Test SMS Simulator Buttons */}
@@ -76,77 +95,66 @@ export const NotificationDrawer: React.FC<Props> = ({
             </span>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onSendTestSms('QUEUE')}
               className="px-3 py-2 bg-white hover:bg-[#D4E09B]/30 text-slate-800 text-[11px] font-bold rounded-xl border border-slate-200 text-left truncate cursor-pointer transition-colors shadow-2xs"
             >
               📢 Token Call-In SMS
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onSendTestSms('PAYMENT')}
               className="px-3 py-2 bg-white hover:bg-[#D4E09B]/30 text-slate-800 text-[11px] font-bold rounded-xl border border-slate-200 text-left truncate cursor-pointer transition-colors shadow-2xs"
             >
               💰 DBT ₹ Credited SMS
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onSendTestSms('WEATHER')}
               className="px-3 py-2 bg-white hover:bg-[#D4E09B]/30 text-slate-800 text-[11px] font-bold rounded-xl border border-slate-200 text-left truncate cursor-pointer transition-colors shadow-2xs"
             >
               🌧️ Rain / IMD Alert
-            </button>
-            <button
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onSendTestSms('SLOT')}
               className="px-3 py-2 bg-white hover:bg-[#D4E09B]/30 text-slate-800 text-[11px] font-bold rounded-xl border border-slate-200 text-left truncate cursor-pointer transition-colors shadow-2xs"
             >
               🎟️ Slot Confirmed Pass
-            </button>
+            </motion.button>
           </div>
         </div>
 
         {/* Category Pills & Mark as Read */}
         <div className="px-4 py-3 bg-white border-b border-slate-100 flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5">
-            <button
-              onClick={() => setActiveFilter('ALL')}
-              className={`px-3 py-1 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                activeFilter === 'ALL' ? 'bg-[#1B4332] text-white shadow-xs' : 'text-slate-600 hover:bg-[#F3F6F1]'
-              }`}
-            >
-              All
-            </button>
-            <button
-              onClick={() => setActiveFilter('SMS')}
-              className={`px-3 py-1 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                activeFilter === 'SMS' ? 'bg-[#1B4332] text-white shadow-xs' : 'text-slate-600 hover:bg-[#F3F6F1]'
-              }`}
-            >
-              SMS
-            </button>
-            <button
-              onClick={() => setActiveFilter('WEATHER')}
-              className={`px-3 py-1 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                activeFilter === 'WEATHER' ? 'bg-[#1B4332] text-white shadow-xs' : 'text-slate-600 hover:bg-[#F3F6F1]'
-              }`}
-            >
-              Weather
-            </button>
-            <button
-              onClick={() => setActiveFilter('PAYMENT')}
-              className={`px-3 py-1 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors ${
-                activeFilter === 'PAYMENT' ? 'bg-[#1B4332] text-white shadow-xs' : 'text-slate-600 hover:bg-[#F3F6F1]'
-              }`}
-            >
-              Payments
-            </button>
+            {(['ALL', 'SMS', 'WEATHER', 'PAYMENT'] as const).map((filter) => (
+              <button
+                key={filter}
+                onClick={() => setActiveFilter(filter)}
+                className={`px-3 py-1 rounded-xl text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                  activeFilter === filter ? 'bg-[#1B4332] text-white shadow-xs' : 'text-slate-600 hover:bg-[#F3F6F1]'
+                }`}
+              >
+                {filter === 'ALL' ? 'All' : filter === 'SMS' ? 'SMS' : filter === 'WEATHER' ? 'Weather' : 'Payments'}
+              </button>
+            ))}
           </div>
           {notifications.length > 0 && (
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={onMarkAllRead}
               className="text-[11px] text-[#1B4332] hover:text-[#2D6A4F] font-bold uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-colors"
             >
               <CheckCheck className="w-3.5 h-3.5" />
               <span>Mark read</span>
-            </button>
+            </motion.button>
           )}
         </div>
 
@@ -160,7 +168,9 @@ export const NotificationDrawer: React.FC<Props> = ({
             </div>
           ) : (
             filtered.map((notif) => (
-              <div
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
                 key={notif.id}
                 className={`p-4 rounded-2xl border transition-all ${
                   notif.read
@@ -186,11 +196,11 @@ export const NotificationDrawer: React.FC<Props> = ({
                 <p className="text-xs text-slate-700 mt-2 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/70 font-mono text-[11px]">
                   {language === 'hi' ? notif.hindiMessage : notif.message}
                 </p>
-              </div>
+              </motion.div>
             ))
           )}
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import {
   Tractor,
   Shield,
@@ -309,7 +310,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
           </div>
 
           {/* Role Switching Tabs */}
-          <div className="grid grid-cols-2 p-1.5 bg-[#F3F6F1] border-b border-slate-200">
+          <div className="grid grid-cols-2 p-1.5 bg-[#F3F6F1] border-b border-slate-200 relative">
             <button
               id="login-tab-farmer"
               type="button"
@@ -317,12 +318,19 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
                 setActiveTab('FARMER');
                 setErrorMessage('');
               }}
-              className={`py-3 text-xs font-bold uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`relative py-3 text-xs font-bold uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer z-10 ${
                 activeTab === 'FARMER'
-                  ? 'bg-white text-[#1B4332] shadow-sm ring-1 ring-slate-200'
+                  ? 'text-[#1B4332]'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
+              {activeTab === 'FARMER' && (
+                <motion.div
+                  layoutId="loginTabIndicator"
+                  className="absolute inset-0 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 -z-10"
+                  transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                />
+              )}
               <Tractor className="w-4 h-4 text-[#2D6A4F]" />
               <span>{language === 'hi' ? 'किसान (मोबाइल)' : 'Farmer (Mobile)'}</span>
             </button>
@@ -333,12 +341,19 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
                 setActiveTab('ADMIN');
                 setErrorMessage('');
               }}
-              className={`py-3 text-xs font-bold uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              className={`relative py-3 text-xs font-bold uppercase tracking-wider rounded-2xl flex items-center justify-center gap-2 transition-colors cursor-pointer z-10 ${
                 activeTab === 'ADMIN'
-                  ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200'
+                  ? 'text-slate-900'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
+              {activeTab === 'ADMIN' && (
+                <motion.div
+                  layoutId="loginTabIndicator"
+                  className="absolute inset-0 bg-white rounded-2xl shadow-sm ring-1 ring-slate-200 -z-10"
+                  transition={{ type: 'spring', stiffness: 450, damping: 32 }}
+                />
+              )}
               <Shield className="w-4 h-4 text-slate-700" />
               <span>{language === 'hi' ? 'विभागीय प्रशासक' : 'Admin'}</span>
             </button>
@@ -832,6 +847,7 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
             </p>
 
             <div className="space-y-3">
+              {/* FAQ mapping */}
               {[
                 {
                   id: 0,
@@ -875,16 +891,26 @@ export const LoginPage: React.FC<Props> = ({ language, onLanguageChange, onLogin
                     >
                       <span>{language === 'hi' ? faq.qHi : faq.qEn}</span>
                       <ChevronDown
-                        className={`w-4 h-4 text-slate-500 shrink-0 transition-transform ${
+                        className={`w-4 h-4 text-slate-500 shrink-0 transition-transform duration-200 ${
                           isOpen ? 'rotate-180 text-[#2D6A4F]' : ''
                         }`}
                       />
                     </button>
-                    {isOpen && (
-                      <div className="px-4 py-3 bg-white text-xs text-slate-600 leading-relaxed border-t border-slate-100">
-                        {language === 'hi' ? faq.aHi : faq.aEn}
-                      </div>
-                    )}
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.2 }}
+                          className="overflow-hidden"
+                        >
+                          <div className="px-4 py-3 bg-white text-xs text-slate-600 leading-relaxed border-t border-slate-100">
+                            {language === 'hi' ? faq.aHi : faq.aEn}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 );
               })}
