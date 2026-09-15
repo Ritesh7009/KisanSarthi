@@ -1,5 +1,6 @@
 /app/applet/backend/src/test/java/com/kisansarthi/booking/BookingConcurrencyTest.java
 /app/applet/backend/src/test/java/com/kisansarthi/booking/BookingRemediationIntegrationTest.java
+/app/applet/backend/src/test/java/com/kisansarthi/booking/PostgresBookingConcurrencyIntegrationTest.java
 /app/applet/backend/src/test/java/com/kisansarthi/report/DistrictAuthorizationIntegrationTest.java
 /app/applet/backend/src/test/java/com/kisansarthi/report/ReportServiceIntegrationTest.java
 /app/applet/backend/src/test/java/com/kisansarthi/security/SecurityRegressionIntegrationTest.java
